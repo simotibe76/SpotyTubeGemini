@@ -1,15 +1,19 @@
-import { useState, useEffect, useRef } from 'react';
+// src/App.jsx
+import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 
+// Importazioni Icone (le tue, non le ho modificate)
 import {
   HeartIcon,
   PlusIcon,
   TrashIcon,
   ListBulletIcon,
-  XMarkIcon, 
+  XMarkIcon,
 } from '@heroicons/react/24/solid';
 import { HeartIcon as HeartOutlineIcon } from '@heroicons/react/24/outline';
 
+// Importazioni Componenti
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import PlayerControls from './components/PlayerControls';
@@ -17,9 +21,10 @@ import SearchResults from './components/SearchResults';
 import FavoritesList from './components/FavoritesList';
 import HistoryList from './components/HistoryList';
 import PlaylistsOverview from './components/PlaylistsOverview';
-import PlaylistDetail from './components/PlaylistDetail'; 
+import PlaylistDetail from './components/PlaylistDetail';
+import ToastNotification from './components/ToastNotification';
 
-
+// Importazioni funzioni del database locale (Dexie)
 import {
   addFavorite,
   removeFavorite,
@@ -36,6 +41,8 @@ import {
 } from './db';
 
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID; // Utilizziamo una variabile d'ambiente per il Client ID
+const SCOPES = 'https://www.googleapis.com/auth/youtube.force-ssl';
 const BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
 const SECTIONS = {
@@ -46,7 +53,11 @@ const SECTIONS = {
   VIEW_PLAYLIST: 'viewPlaylist',
 };
 
-function App() {
+// Questo componente si occuperà del routing
+function AppContent() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -56,30 +67,117 @@ function App() {
   const [playerInstance, setPlayerInstance] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeSection, setActiveSection] = useState(SECTIONS.SEARCH);
-
   const [favorites, setFavorites] = useState([]);
   const [history, setHistory] = useState([]);
   const [playlists, setPlaylists] = useState([]);
   const [currentPlaylist, setCurrentPlaylist] = useState(null);
-  const [currentViewedPlaylistId, setCurrentViewedPlaylistId] = useState(null); 
-
-  // NUOVI STATI PER LA RIPRODUZIONE DELLE PLAYLIST
-  const [currentPlaylistPlayingId, setCurrentPlaylistPlayingId] = useState(null); // ID della playlist attualmente in riproduzione
-  const [currentPlaylistVideos, setCurrentPlaylistVideos] = useState([]); // Array dei video della playlist corrente
-  const [currentPlaylistIndex, setCurrentPlaylistIndex] = useState(0); // Indice del brano corrente nella playlist
-
-  // Stati per la modale "Aggiungi a playlist" (usata anche per la creazione di nuove playlist)
+  const [currentViewedPlaylistId, setCurrentViewedPlaylistId] = useState(null);
+  const [currentPlaylistPlayingId, setCurrentPlaylistPlayingId] = useState(null);
+  const [currentPlaylistVideos, setCurrentPlaylistVideos] = useState([]);
+  const [currentPlaylistIndex, setCurrentPlaylistIndex] = useState(0);
   const [showAddToPlaylistModal, setShowAddToPlaylistModal] = useState(false);
-  const [videoToAdd, setVideoToAdd] = useState(null); 
+  const [videoToAdd, setVideoToAdd] = useState(null);
   const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [isSeeking, setIsSeeking] = useState(false);
+  const intervalRef = useRef(null);
 
-  // STATI PER LA BARRA DI AVANZAMENTO
-  const [videoDuration, setVideoDuration] = useState(0); 
-  const [videoCurrentTime, setVideoCurrentTime] = useState(0); 
-  const [isSeeking, setIsSeeking] = useState(false); 
-  
-  const intervalRef = useRef(null); 
+  // STATI PER GOOGLE API E AUTENTICAZIONE
+  const [gapiInitialized, setGapiInitialized] = useState(false);
+  const [gisLoaded, setGisLoaded] = useState(false);
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
+  const [accessToken, setAccessToken] = useState(null);
+  const tokenClient = useRef(null);
 
+  // Funzione per la notifica toast (da implementare in un componente ToastNotification)
+  const [toastMessage, setToastMessage] = useState('');
+  const showToast = (message, type = 'info') => {
+    setToastMessage({ message, type });
+  };
+
+  // Caricamento delle librerie di Google per l'autenticazione
+  useEffect(() => {
+    const loadGapi = () => {
+      window.gapi.load('client', async () => {
+        await window.gapi.client.init({
+          apiKey: YOUTUBE_API_KEY,
+          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
+        });
+        setGapiInitialized(true);
+      });
+    };
+
+    const loadGis = () => {
+      if (!CLIENT_ID) {
+        console.error("CLIENT_ID non definito. Controlla il tuo file .env");
+        return;
+      }
+      tokenClient.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            setAccessToken(tokenResponse.access_token);
+            setIsSignedIn(true);
+            window.gapi.client.setToken({ access_token: tokenResponse.access_token });
+
+            // Recupera le informazioni del profilo utente
+            window.gapi.client.youtube.channels.list({
+              'part': ['snippet'],
+              'mine': true
+            }).then(response => {
+              if (response.result.items.length > 0) {
+                const profile = response.result.items[0].snippet;
+                setUserProfile({
+                  name: profile.title,
+                  imageUrl: profile.thumbnails.default.url
+                });
+                showToast(`Benvenuto, ${profile.title}!`, 'success');
+              }
+            }).catch(err => {
+              console.error("Errore nel recupero del profilo YouTube:", err);
+            });
+          }
+        },
+      });
+      setGisLoaded(true);
+    };
+
+    const scriptGapi = document.createElement('script');
+    scriptGapi.src = 'https://apis.google.com/js/api.js';
+    scriptGapi.onload = loadGapi;
+    document.body.appendChild(scriptGapi);
+
+    const scriptGis = document.createElement('script');
+    scriptGis.src = 'https://accounts.google.com/gsi/client';
+    scriptGis.onload = loadGis;
+    document.body.appendChild(scriptGis);
+
+    return () => {
+      document.body.removeChild(scriptGapi);
+      document.body.removeChild(scriptGis);
+    };
+  }, []);
+
+  const handleGoogleAuthClick = () => {
+    if (tokenClient.current) {
+      tokenClient.current.requestAccessToken();
+    }
+  };
+
+  const handleSignOut = () => {
+    if (accessToken) {
+      window.google.accounts.oauth2.revoke(accessToken, () => {
+        setAccessToken(null);
+        setIsSignedIn(false);
+        setUserProfile(null);
+        window.gapi.client.setToken(null);
+        showToast('Disconnesso da Google.', 'info');
+      });
+    }
+  };
 
   const loadData = async (section) => {
     try {
@@ -92,13 +190,11 @@ function App() {
       } else if (section === SECTIONS.PLAYLISTS) {
         const pls = await getPlaylists();
         setPlaylists(pls);
-      } else if (section === SECTIONS.VIEW_PLAYLIST && typeof currentViewedPlaylistId === 'number') { 
-        console.log(`loadData: Caricamento playlist ID: ${currentViewedPlaylistId}`);
+      } else if (section === SECTIONS.VIEW_PLAYLIST && typeof currentViewedPlaylistId === 'number') {
         const pl = await getPlaylist(currentViewedPlaylistId);
         setCurrentPlaylist(pl);
       } else if (section === SECTIONS.VIEW_PLAYLIST && currentViewedPlaylistId === null) {
-         console.warn("loadData: Tentativo di visualizzare playlist senza ID valido. Resetto la sezione.");
-         setActiveSection(SECTIONS.PLAYLISTS); 
+        setActiveSection(SECTIONS.PLAYLISTS);
       }
     } catch (err) {
       console.error("Error loading data for section:", section, err);
@@ -108,7 +204,7 @@ function App() {
 
   useEffect(() => {
     loadData(activeSection);
-  }, [activeSection, currentViewedPlaylistId]); 
+  }, [activeSection, currentViewedPlaylistId]);
 
   useEffect(() => {
     const fetchFavoritesOnLoad = async () => {
@@ -124,30 +220,32 @@ function App() {
         clearInterval(intervalRef.current);
       }
     };
-  }, []); 
+  }, []);
 
+  // La funzione di ricerca ora usa il client di gapi per fare la chiamata API
   const handleSearch = async (e) => {
     e.preventDefault();
+    if (!gapiInitialized) {
+      setError('API di Google non ancora caricate. Riprova.');
+      return;
+    }
     if (!searchTerm.trim()) return;
 
     setLoading(true);
     setError(null);
     setSearchResults([]);
     setActiveSection(SECTIONS.SEARCH);
-    setCurrentViewedPlaylistId(null); 
+    setCurrentViewedPlaylistId(null);
 
     try {
-      const response = await axios.get(`${BASE_URL}/search`, {
-        params: {
-          part: 'snippet',
-          q: searchTerm,
-          key: YOUTUBE_API_KEY,
-          type: 'video',
-          maxResults: 10,
-        },
+      const response = await window.gapi.client.Youtube.list({
+        part: 'snippet',
+        q: searchTerm,
+        type: 'video',
+        maxResults: 10,
       });
 
-      const videos = response.data.items.filter(item => item.id.kind === 'youtube#video');
+      const videos = response.result.items.filter(item => item.id.kind === 'youtube#video');
       const formattedVideos = videos.map(video => ({
         videoId: video.id.videoId,
         title: video.snippet.title,
@@ -167,8 +265,8 @@ function App() {
     setPlayingVideoId(videoData.videoId);
     setCurrentPlayingTitle(videoData.title);
     setIsPlaying(true);
-    setVideoCurrentTime(0); 
-    setVideoDuration(0); 
+    setVideoCurrentTime(0);
+    setVideoDuration(0);
     await addHistoryEntry(videoData);
     if (activeSection === SECTIONS.HISTORY) {
       loadData(SECTIONS.HISTORY);
@@ -184,34 +282,32 @@ function App() {
   const onPlayerStateChange = (event) => {
     if (event.data === window.YT.PlayerState.PLAYING) {
       setIsPlaying(true);
-      if (playerInstance) { 
-        setVideoDuration(playerInstance.getDuration()); 
+      if (playerInstance) {
+        setVideoDuration(playerInstance.getDuration());
         if (intervalRef.current) {
-          clearInterval(intervalRef.current); 
+          clearInterval(intervalRef.current);
         }
         intervalRef.current = setInterval(() => {
-          if (playerInstance && !isSeeking) { 
+          if (playerInstance && !isSeeking) {
             setVideoCurrentTime(playerInstance.getCurrentTime());
           }
-        }, 1000); 
+        }, 1000);
       }
     } else if (event.data === window.YT.PlayerState.PAUSED) {
       setIsPlaying(false);
       if (intervalRef.current) {
-        clearInterval(intervalRef.current); 
+        clearInterval(intervalRef.current);
       }
-    } else if (event.data === window.YT.PlayerState.ENDED) { 
+    } else if (event.data === window.YT.PlayerState.ENDED) {
       setIsPlaying(false);
-      setVideoCurrentTime(0); 
+      setVideoCurrentTime(0);
       if (intervalRef.current) {
-        clearInterval(intervalRef.current); 
+        clearInterval(intervalRef.current);
       }
-      // Se stiamo riproducendo una playlist, passa al brano successivo
       if (currentPlaylistPlayingId && currentPlaylistVideos.length > 0) {
         playNextVideo();
       } else {
-        // Se non è una playlist, chiudi il player
-        handleClosePlayer(); 
+        handleClosePlayer();
       }
     }
   };
@@ -228,8 +324,8 @@ function App() {
 
   const handleSeek = (time) => {
     if (playerInstance) {
-      playerInstance.seekTo(time, true); 
-      setVideoCurrentTime(time); 
+      playerInstance.seekTo(time, true);
+      setVideoCurrentTime(time);
     }
   };
 
@@ -242,30 +338,28 @@ function App() {
     setIsPlaying(false);
     setVideoCurrentTime(0);
     setVideoDuration(0);
-    setCurrentPlaylistPlayingId(null); // Resetta lo stato della playlist
-    setCurrentPlaylistVideos([]); // Resetta i video della playlist
-    setCurrentPlaylistIndex(0); // Resetta l'indice
+    setCurrentPlaylistPlayingId(null);
+    setCurrentPlaylistVideos([]);
+    setCurrentPlaylistIndex(0);
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
   };
 
-  // NUOVA FUNZIONE: Avvia la riproduzione di una playlist
   const playPlaylist = async (playlistId) => {
     const playlistToPlay = await getPlaylist(playlistId);
     if (playlistToPlay && playlistToPlay.videos.length > 0) {
       setCurrentPlaylistPlayingId(playlistId);
-      setCurrentPlaylistVideos(playlistToPlay.videos); // Memorizza i video della playlist
+      setCurrentPlaylistVideos(playlistToPlay.videos);
       setCurrentPlaylistIndex(0);
       playVideo(playlistToPlay.videos[0]);
     } else {
       console.warn("Playlist vuota o non trovata:", playlistId);
       alert("La playlist è vuota o non esiste!");
-      handleClosePlayer(); // Chiudi il player se la playlist è vuota
+      handleClosePlayer();
     }
   };
 
-  // NUOVA FUNZIONE: Riproduci il brano successivo nella playlist corrente
   const playNextVideo = () => {
     if (currentPlaylistPlayingId && currentPlaylistVideos.length > 0) {
       const nextIndex = currentPlaylistIndex + 1;
@@ -273,18 +367,14 @@ function App() {
         setCurrentPlaylistIndex(nextIndex);
         playVideo(currentPlaylistVideos[nextIndex]);
       } else {
-        // Fine della playlist, riparti dall'inizio o ferma
-        setCurrentPlaylistIndex(0); // Torna all'inizio
-        playVideo(currentPlaylistVideos[0]); // Riproduci il primo brano di nuovo
-        // Oppure, per fermare: handleClosePlayer();
+        setCurrentPlaylistIndex(0);
+        playVideo(currentPlaylistVideos[0]);
       }
     } else {
-      // Non c'è una playlist attiva, quindi non fare nulla o ferma il singolo video
       handleClosePlayer();
     }
   };
 
-  // NUOVA FUNZIONE: Riproduci il brano precedente nella playlist corrente
   const playPreviousVideo = () => {
     if (currentPlaylistPlayingId && currentPlaylistVideos.length > 0) {
       const prevIndex = currentPlaylistIndex - 1;
@@ -292,13 +382,10 @@ function App() {
         setCurrentPlaylistIndex(prevIndex);
         playVideo(currentPlaylistVideos[prevIndex]);
       } else {
-        // Inizio della playlist, vai alla fine o ferma
-        setCurrentPlaylistIndex(currentPlaylistVideos.length - 1); // Vai all'ultimo brano
-        playVideo(currentPlaylistVideos[currentPlaylistVideos.length - 1]); // Riproduci l'ultimo brano
-        // Oppure, per fermare: handleClosePlayer();
+        setCurrentPlaylistIndex(currentPlaylistVideos.length - 1);
+        playVideo(currentPlaylistVideos[currentPlaylistVideos.length - 1]);
       }
     } else {
-      // Non c'è una playlist attiva, quindi non fare nulla o ferma il singolo video
       handleClosePlayer();
     }
   };
@@ -338,8 +425,8 @@ function App() {
   const handleCreateNewPlaylist = async () => {
     if (newPlaylistName.trim()) {
       await createPlaylist(newPlaylistName.trim());
-      closeAddToPlaylistModal(); 
-      loadData(SECTIONS.PLAYLISTS); 
+      closeAddToPlaylistModal();
+      loadData(SECTIONS.PLAYLISTS);
     }
   };
 
@@ -354,10 +441,9 @@ function App() {
       loadData(SECTIONS.PLAYLISTS);
       if (currentPlaylist && currentPlaylist.id === playlistId) {
         setCurrentPlaylist(null);
-        setCurrentViewedPlaylistId(null); 
+        setCurrentViewedPlaylistId(null);
         setActiveSection(SECTIONS.PLAYLISTS);
       }
-      // Se la playlist eliminata era quella in riproduzione, chiudi il player
       if (currentPlaylistPlayingId === playlistId) {
         handleClosePlayer();
       }
@@ -367,40 +453,33 @@ function App() {
   const handleRemoveVideoFromPlaylist = async (playlistId, videoId) => {
     await removeVideoFromPlaylist(playlistId, videoId);
     loadData(SECTIONS.VIEW_PLAYLIST);
-    // Se il video rimosso fa parte della playlist in riproduzione, aggiorna l'array dei video
     if (currentPlaylistPlayingId === playlistId) {
       const updatedPlaylist = await getPlaylist(playlistId);
       setCurrentPlaylistVideos(updatedPlaylist.videos);
-      // Se il video rimosso era quello corrente, passa al successivo o ferma
       if (playingVideoId === videoId) {
-        // Se non ci sono altri video, chiudi il player
         if (updatedPlaylist.videos.length === 0) {
           handleClosePlayer();
         } else {
-          // Altrimenti, prova a riprodurre il prossimo video
-          playNextVideo(); 
+          playNextVideo();
         }
       } else {
         // Se il video rimosso non era quello corrente, ma l'indice corrente è ora fuori dai limiti
         // o punta ad un video sbagliato a causa della rimozione, ricalcola l'indice o resetta.
-        // Per semplicità, non facciamo un ricalcolo complesso qui, ma è un punto da considerare.
       }
     }
   };
 
   const openCreatePlaylistModal = async () => {
-    console.log("openCreatePlaylistModal chiamata!");
-    setVideoToAdd(null); 
+    setVideoToAdd(null);
     setShowAddToPlaylistModal(true);
-    const pls = await getPlaylists(); 
+    const pls = await getPlaylists();
     setPlaylists(pls);
-    console.log("showAddToPlaylistModal impostato a true:", true);
   };
 
   const openAddToPlaylistModal = async (video) => {
     setVideoToAdd(video);
     setShowAddToPlaylistModal(true);
-    const pls = await getPlaylists(); 
+    const pls = await getPlaylists();
     setPlaylists(pls);
   };
 
@@ -418,7 +497,6 @@ function App() {
     if (currentPlaylist && currentPlaylist.id === playlistId) {
       loadData(SECTIONS.VIEW_PLAYLIST);
     }
-    // Se il video è aggiunto alla playlist attualmente in riproduzione
     if (currentPlaylistPlayingId === playlistId) {
       const updatedPlaylist = await getPlaylist(playlistId);
       setCurrentPlaylistVideos(updatedPlaylist.videos);
@@ -463,21 +541,21 @@ function App() {
             playlists={playlists}
             handleViewPlaylist={handleViewPlaylist}
             handleDeletePlaylist={handleDeletePlaylist}
-            openCreatePlaylistModal={openCreatePlaylistModal} 
-            playPlaylist={playPlaylist} // PASSA LA FUNZIONE playPlaylist
+            openCreatePlaylistModal={openCreatePlaylistModal}
+            playPlaylist={playPlaylist}
           />
         );
       case SECTIONS.VIEW_PLAYLIST:
         return (
           <PlaylistDetail
-            playlist={currentPlaylist} 
+            playlist={currentPlaylist}
             setActiveSection={setActiveSection}
             handleToggleFavorite={handleToggleFavorite}
             handleRemoveVideoFromPlaylist={handleRemoveVideoFromPlaylist}
             playVideo={playVideo}
             favorites={favorites}
-            setCurrentViewedPlaylistId={setCurrentViewedPlaylistId} 
-            setCurrentPlaylist={setCurrentPlaylist} 
+            setCurrentViewedPlaylistId={setCurrentViewedPlaylistId}
+            setCurrentPlaylist={setCurrentPlaylist}
           />
         );
       default:
@@ -493,6 +571,11 @@ function App() {
         handleSearch={handleSearch}
         loading={loading}
         error={error}
+        // NUOVE PROP PER L'AUTENTICAZIONE
+        isSignedIn={isSignedIn}
+        userProfile={userProfile}
+        handleGoogleAuthClick={handleGoogleAuthClick}
+        handleSignOut={handleSignOut}
       />
 
       <main className="w-full max-w-2xl flex-grow mb-4">
@@ -503,9 +586,14 @@ function App() {
         activeSection={activeSection}
         setActiveSection={setActiveSection}
         setSearchResults={setSearchResults}
+        // NUOVE PROP PER L'AUTENTICAZIONE
+        isSignedIn={isSignedIn}
+        userProfile={userProfile}
+        handleGoogleAuthClick={handleGoogleAuthClick}
+        handleSignOut={handleSignOut}
       />
 
-      {playingVideoId && ( 
+      {playingVideoId && (
         <PlayerControls
           playingVideoId={playingVideoId}
           currentPlayingTitle={currentPlayingTitle}
@@ -518,11 +606,10 @@ function App() {
           videoCurrentTime={videoCurrentTime}
           handleSeek={handleSeek}
           setIsSeeking={setIsSeeking}
-          handleClosePlayer={handleClosePlayer} 
-          // NUOVE PROP PER LA NAVIGAZIONE PLAYLIST
+          handleClosePlayer={handleClosePlayer}
           playNextVideo={playNextVideo}
           playPreviousVideo={playPreviousVideo}
-          isPlaylistActive={!!currentPlaylistPlayingId} // Indica se una playlist è attiva
+          isPlaylistActive={!!currentPlaylistPlayingId}
         />
       )}
 
@@ -536,13 +623,13 @@ function App() {
               <XMarkIcon className="h-6 w-6" />
             </button>
             <h3 className="text-xl font-bold mb-4 text-purple-300">
-              {videoToAdd ? "Aggiungi a Playlist" : "Crea Nuova Playlist"} 
+              {videoToAdd ? "Aggiungi a Playlist" : "Crea Nuova Playlist"}
             </h3>
             {videoToAdd && (
               <p className="text-gray-300 mb-4">Brano: <span className="font-semibold">{videoToAdd.title}</span></p>
             )}
 
-            {videoToAdd && ( 
+            {videoToAdd && (
               <div className="mb-6">
                 <h4 className="font-semibold text-lg mb-2">Playlist Esistenti:</h4>
                 {playlists.length > 0 ? (
@@ -576,7 +663,7 @@ function App() {
                   onChange={(e) => setNewPlaylistName(e.target.value)}
                 />
                 <button
-                  onClick={handleCreateNewPlaylist} 
+                  onClick={handleCreateNewPlaylist}
                   className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-bold transition-colors duration-200"
                   disabled={!newPlaylistName.trim()}
                 >
@@ -584,10 +671,26 @@ function App() {
                 </button>
               </div>
             </div>
+
+            <button
+              onClick={closeAddToPlaylistModal}
+              className="mt-4 w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg font-bold transition-colors duration-200"
+            >
+              Annulla
+            </button>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+// Wrapping del componente principale con Router
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 
