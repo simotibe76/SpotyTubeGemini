@@ -91,11 +91,7 @@ function AppContent() {
   const [accessToken, setAccessToken] = useState(null);
   const tokenClient = useRef(null);
 
-  // Funzione per la notifica toast (da implementare in un componente ToastNotification)
-  const [toastMessage, setToastMessage] = useState('');
-  const showToast = (message, type = 'info') => {
-    setToastMessage({ message, type });
-  };
+
 
   // Caricamento delle librerie di Google per l'autenticazione
   useEffect(() => {
