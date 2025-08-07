@@ -3,13 +3,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 
-// Importazioni Icone (le tue, non le ho modificate)
+// Importazioni Icone
 import {
   HeartIcon,
   PlusIcon,
   TrashIcon,
   ListBulletIcon,
   XMarkIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/solid';
 import { HeartIcon as HeartOutlineIcon } from '@heroicons/react/24/outline';
 
@@ -22,7 +23,6 @@ import FavoritesList from './components/FavoritesList';
 import HistoryList from './components/HistoryList';
 import PlaylistsOverview from './components/PlaylistsOverview';
 import PlaylistDetail from './components/PlaylistDetail';
-
 
 // Importazioni funzioni del database locale (Dexie)
 import {
@@ -41,8 +41,8 @@ import {
 } from './db';
 
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID; // Utilizziamo una variabile d'ambiente per il Client ID
-const SCOPES = 'https://www.googleapis.com/auth/youtube.force-ssl';
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
 const BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
 const SECTIONS = {
@@ -53,7 +53,6 @@ const SECTIONS = {
   VIEW_PLAYLIST: 'viewPlaylist',
 };
 
-// Questo componente si occuperà del routing
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -91,12 +90,11 @@ function AppContent() {
   const [accessToken, setAccessToken] = useState(null);
   const tokenClient = useRef(null);
 
-
-
   // Caricamento delle librerie di Google per l'autenticazione
   useEffect(() => {
     const loadGapi = () => {
       window.gapi.load('client', async () => {
+        // Inizializza il client per le API di YouTube
         await window.gapi.client.init({
           apiKey: YOUTUBE_API_KEY,
           discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
@@ -118,23 +116,26 @@ function AppContent() {
             setAccessToken(tokenResponse.access_token);
             setIsSignedIn(true);
             window.gapi.client.setToken({ access_token: tokenResponse.access_token });
-
-            // Recupera le informazioni del profilo utente
-            window.gapi.client.youtube.channels.list({
-              'part': ['snippet'],
-              'mine': true
-            }).then(response => {
-              if (response.result.items.length > 0) {
-                const profile = response.result.items[0].snippet;
-                setUserProfile({
-                  name: profile.title,
-                  imageUrl: profile.thumbnails.default.url
-                });
-                
-              }
-            }).catch(err => {
-              console.error("Errore nel recupero del profilo YouTube:", err);
-            });
+            
+            // Verifica che il client di YouTube sia inizializzato prima di fare la chiamata
+            if (window.gapi.client.youtube) {
+              window.gapi.client.youtube.channels.list({
+                'part': ['snippet'],
+                'mine': true
+              }).then(response => {
+                if (response.result.items.length > 0) {
+                  const profile = response.result.items[0].snippet;
+                  setUserProfile({
+                    name: profile.title,
+                    imageUrl: profile.thumbnails.default.url
+                  });
+                }
+              }).catch(err => {
+                console.error("Errore nel recupero del profilo YouTube:", err);
+              });
+            } else {
+              console.error("gapi.client.youtube non è pronto.");
+            }
           }
         },
       });
@@ -170,7 +171,6 @@ function AppContent() {
         setIsSignedIn(false);
         setUserProfile(null);
         window.gapi.client.setToken(null);
-       
       });
     }
   };
@@ -218,11 +218,11 @@ function AppContent() {
     };
   }, []);
 
-  // La funzione di ricerca ora usa il client di gapi per fare la chiamata API
   const handleSearch = async (e) => {
     e.preventDefault();
-    if (!gapiInitialized) {
-      setError('API di Google non ancora caricate. Riprova.');
+    // Aggiunto un controllo più robusto per gapi.client.youtube
+    if (!gapiInitialized || !window.gapi.client.youtube) {
+      setError('API di Google non ancora caricate. Riprova tra poco.');
       return;
     }
     if (!searchTerm.trim()) return;
@@ -251,7 +251,12 @@ function AppContent() {
       setSearchResults(formattedVideos);
     } catch (err) {
       console.error("Error during search:", err);
-      setError("Si è verificato un errore durante la ricerca. Riprova più tardi.");
+      // Errore specifico per una chiave API non valida
+      if (err.result && err.result.error && err.result.error.code === 403) {
+        setError("Errore 403: La chiave API non è valida o non ha i permessi necessari.");
+      } else {
+        setError("Si è verificato un errore durante la ricerca. Riprova più tardi.");
+      }
     } finally {
       setLoading(false);
     }
@@ -386,7 +391,6 @@ function AppContent() {
     }
   };
 
-
   const playerOpts = {
     height: '0',
     width: '0',
@@ -499,7 +503,6 @@ function AppContent() {
     }
   };
 
-
   const renderContent = () => {
     switch (activeSection) {
       case SECTIONS.SEARCH:
@@ -567,7 +570,6 @@ function AppContent() {
         handleSearch={handleSearch}
         loading={loading}
         error={error}
-        // NUOVE PROP PER L'AUTENTICAZIONE
         isSignedIn={isSignedIn}
         userProfile={userProfile}
         handleGoogleAuthClick={handleGoogleAuthClick}
@@ -582,7 +584,6 @@ function AppContent() {
         activeSection={activeSection}
         setActiveSection={setActiveSection}
         setSearchResults={setSearchResults}
-        // NUOVE PROP PER L'AUTENTICAZIONE
         isSignedIn={isSignedIn}
         userProfile={userProfile}
         handleGoogleAuthClick={handleGoogleAuthClick}
@@ -681,7 +682,6 @@ function AppContent() {
   );
 }
 
-// Wrapping del componente principale con Router
 function App() {
   return (
     <Router>
