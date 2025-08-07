@@ -219,48 +219,47 @@ function AppContent() {
   }, []);
 
   const handleSearch = async (e) => {
-    e.preventDefault();
-    // Aggiunto un controllo più robusto per gapi.client.youtube
-    if (!gapiInitialized || !window.gapi.client.youtube) {
-      setError('API di Google non ancora caricate. Riprova tra poco.');
-      return;
+  e.preventDefault();
+  // Nuovo controllo più robusto:
+  if (!isSignedIn || !gapiInitialized || !window.gapi.client.youtube) {
+    setError('Devi prima accedere e attendere che le API siano caricate.');
+    return;
+  }
+  if (!searchTerm.trim()) return;
+
+  setLoading(true);
+  setError(null);
+  setSearchResults([]);
+  setActiveSection(SECTIONS.SEARCH);
+  setCurrentViewedPlaylistId(null);
+
+  try {
+    const response = await window.gapi.client.Youtube.list({
+      part: 'snippet',
+      q: searchTerm,
+      type: 'video',
+      maxResults: 10,
+    });
+
+    const videos = response.result.items.filter(item => item.id.kind === 'youtube#video');
+    const formattedVideos = videos.map(video => ({
+      videoId: video.id.videoId,
+      title: video.snippet.title,
+      channelTitle: video.snippet.channelTitle,
+      thumbnail: video.snippet.thumbnails.default.url,
+    }));
+    setSearchResults(formattedVideos);
+  } catch (err) {
+    console.error("Error during search:", err);
+    if (err.result && err.result.error && err.result.error.code === 403) {
+      setError("Errore 403: La chiave API non è valida o non ha i permessi necessari.");
+    } else {
+      setError("Si è verificato un errore durante la ricerca. Riprova più tardi.");
     }
-    if (!searchTerm.trim()) return;
-
-    setLoading(true);
-    setError(null);
-    setSearchResults([]);
-    setActiveSection(SECTIONS.SEARCH);
-    setCurrentViewedPlaylistId(null);
-
-    try {
-      const response = await window.gapi.client.Youtube.list({
-        part: 'snippet',
-        q: searchTerm,
-        type: 'video',
-        maxResults: 10,
-      });
-
-      const videos = response.result.items.filter(item => item.id.kind === 'youtube#video');
-      const formattedVideos = videos.map(video => ({
-        videoId: video.id.videoId,
-        title: video.snippet.title,
-        channelTitle: video.snippet.channelTitle,
-        thumbnail: video.snippet.thumbnails.default.url,
-      }));
-      setSearchResults(formattedVideos);
-    } catch (err) {
-      console.error("Error during search:", err);
-      // Errore specifico per una chiave API non valida
-      if (err.result && err.result.error && err.result.error.code === 403) {
-        setError("Errore 403: La chiave API non è valida o non ha i permessi necessari.");
-      } else {
-        setError("Si è verificato un errore durante la ricerca. Riprova più tardi.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   const playVideo = async (videoData) => {
     setPlayingVideoId(videoData.videoId);
