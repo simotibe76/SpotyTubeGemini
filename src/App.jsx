@@ -130,7 +130,7 @@ function AppContent() {
                   name: profile.title,
                   imageUrl: profile.thumbnails.default.url
                 });
-                showToast(`Benvenuto, ${profile.title}!`, 'success');
+                
               }
             }).catch(err => {
               console.error("Errore nel recupero del profilo YouTube:", err);
@@ -170,7 +170,7 @@ function AppContent() {
         setIsSignedIn(false);
         setUserProfile(null);
         window.gapi.client.setToken(null);
-        showToast('Disconnesso da Google.', 'info');
+       
       });
     }
   };
