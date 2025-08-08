@@ -85,22 +85,31 @@ function AppContent() {
   const [userProfile, setUserProfile] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const tokenClient = useRef(null);
-  const gapiLoaded = useRef(false);
+  const [isApiReady, setIsApiReady] = useState(false); // Nuovo stato per monitorare la prontezza di GAPI
 
-  const isSearchDisabled = !isSignedIn || loading;
+  const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
-  // Caricamento delle librerie di Google per l'autenticazione
+  // Caricamento delle librerie di Google e inizializzazione
   useEffect(() => {
-    const loadGapi = () => {
-      window.gapi.load('client', async () => {
-        await window.gapi.client.init({
-          apiKey: YOUTUBE_API_KEY,
-          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
-        });
-        gapiLoaded.current = true;
+    let gapiScript, gisScript;
+  
+    const handleClientLoad = () => {
+      // Inizializza il client di Google
+      window.gapi.client.init({
+        apiKey: YOUTUBE_API_KEY,
+        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
+      }).then(() => {
+        setIsApiReady(true);
+        console.log("GAPI Client pronto!");
+      }).catch(err => {
+        console.error("Errore durante l'inizializzazione del client GAPI:", err);
       });
     };
-
+  
+    const loadGapi = () => {
+      window.gapi.load('client', handleClientLoad);
+    };
+  
     const loadGis = () => {
       if (!CLIENT_ID) {
         console.error("CLIENT_ID non definito. Controlla il tuo file .env");
@@ -114,8 +123,9 @@ function AppContent() {
             setAccessToken(tokenResponse.access_token);
             setIsSignedIn(true);
             window.gapi.client.setToken({ access_token: tokenResponse.access_token });
-            
-            if (gapiLoaded.current && window.gapi.client.youtube) {
+  
+            // Recupera il profilo utente solo se le API sono pronte
+            if (isApiReady && window.gapi.client.youtube) {
               window.gapi.client.youtube.channels.list({
                 'part': ['snippet'],
                 'mine': true
@@ -131,28 +141,33 @@ function AppContent() {
                 console.error("Errore nel recupero del profilo YouTube:", err);
               });
             } else {
-              console.error("gapi.client.youtube non è pronto.");
+              console.warn("API non ancora pronte. Il recupero del profilo sarà ignorato fino al prossimo login o refresh.");
             }
           }
         },
       });
     };
-
-    const scriptGapi = document.createElement('script');
-    scriptGapi.src = 'https://apis.google.com/js/api.js';
-    scriptGapi.onload = loadGapi;
-    document.body.appendChild(scriptGapi);
-
-    const scriptGis = document.createElement('script');
-    scriptGis.src = 'https://accounts.google.com/gsi/client';
-    scriptGis.onload = loadGis;
-    document.body.appendChild(scriptGis);
-
+  
+    gapiScript = document.createElement('script');
+    gapiScript.src = 'https://apis.google.com/js/api.js';
+    gapiScript.async = true;
+    gapiScript.defer = true;
+    gapiScript.onload = loadGapi;
+    document.body.appendChild(gapiScript);
+  
+    gisScript = document.createElement('script');
+    gisScript.src = 'https://accounts.google.com/gsi/client';
+    gisScript.async = true;
+    gisScript.defer = true;
+    gisScript.onload = loadGis;
+    document.body.appendChild(gisScript);
+  
     return () => {
-      document.body.removeChild(scriptGapi);
-      document.body.removeChild(scriptGis);
+      if (gapiScript) document.body.removeChild(gapiScript);
+      if (gisScript) document.body.removeChild(gisScript);
     };
-  }, []);
+  }, [isApiReady]);
+  
 
   const handleGoogleAuthClick = () => {
     if (tokenClient.current) {
@@ -216,8 +231,12 @@ function AppContent() {
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    if (!isSignedIn || !gapiLoaded.current || !window.gapi.client.youtube) {
-      setError('Devi prima accedere e attendere che le API siano caricate.');
+    if (!isSignedIn) {
+      setError('Devi prima accedere con il tuo account Google.');
+      return;
+    }
+    if (!isApiReady) {
+      setError('Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.');
       return;
     }
     if (!searchTerm.trim()) return;
