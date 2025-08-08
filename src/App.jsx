@@ -98,7 +98,7 @@ function AppContent() {
 
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
-  useEffect(() => {
+useEffect(() => {
     const initGoogleApis = async () => {
       try {
         await loadScript('https://apis.google.com/js/api.js');
@@ -119,6 +119,7 @@ function AppContent() {
         tokenClient.current = window.google.accounts.oauth2.initTokenClient({
           client_id: CLIENT_ID,
           scope: SCOPES,
+          redirect_uri: window.location.origin, // Usa l'URL dell'applicazione come URI di reindirizzamento
           callback: (tokenResponse) => {
             if (tokenResponse && tokenResponse.access_token) {
               setAccessToken(tokenResponse.access_token);
@@ -166,17 +167,32 @@ function AppContent() {
     };
   }, []);
 
+    initGoogleApis();
+
+    const fetchFavoritesOnLoad = async () => {
+      const favs = await getFavorites();
+      setFavorites(favs);
+    };
+    fetchFavoritesOnLoad();
+    
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     loadData(activeSection);
   }, [activeSection, currentViewedPlaylistId]);
   
-  const handleGoogleAuthClick = () => {
+const handleGoogleAuthClick = () => {
     if (!isApiReady) {
       setError("Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.");
       return;
     }
     if (tokenClient.current) {
-      tokenClient.current.requestAccessToken();
+      tokenClient.current.requestCode();
     }
   };
 
