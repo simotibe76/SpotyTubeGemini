@@ -101,10 +101,7 @@ function AppContent() {
   useEffect(() => {
     const initGoogleApis = async () => {
       try {
-        // Carica la libreria gapi
         await loadScript('https://apis.google.com/js/api.js');
-        
-        // Inizializza il client GAPI
         await new Promise((resolve, reject) => {
           window.gapi.load('client', () => {
             window.gapi.client.init({
@@ -118,10 +115,7 @@ function AppContent() {
           });
         });
 
-        // Carica la libreria GIS
         await loadScript('https://accounts.google.com/gsi/client');
-
-        // Inizializza il client GIS
         tokenClient.current = window.google.accounts.oauth2.initTokenClient({
           client_id: CLIENT_ID,
           scope: SCOPES,
@@ -131,7 +125,6 @@ function AppContent() {
               setIsSignedIn(true);
               window.gapi.client.setToken({ access_token: tokenResponse.access_token });
               
-              // Recupera il profilo solo se le API sono pronte
               if (isApiReady) {
                 window.gapi.client.youtube.channels.list({
                   'part': ['snippet'],
@@ -232,7 +225,6 @@ function AppContent() {
       setError('Devi prima accedere con il tuo account Google.');
       return;
     }
-    // CONTROLLO FONDAMENTALE: l'API deve essere pronta
     if (!isApiReady || !window.gapi.client.youtube) {
       setError('Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.');
       return;
