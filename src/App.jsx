@@ -51,38 +51,15 @@ const SECTIONS = {
   VIEW_PLAYLIST: 'viewPlaylist',
 };
 
-// Funzione di utilità per caricare gli script
+// Funzione per caricare script con Promise
 const loadScript = (src) => {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = src;
     script.async = true;
-    script.onload = () => resolve(script);
+    script.onload = () => resolve();
     script.onerror = () => reject(new Error(`Script loading failed for ${src}`));
     document.body.appendChild(script);
-  });
-};
-
-// Funzione di utilità per caricare e inizializzare il client gapi
-const loadGapiClient = () => {
-  return new Promise((resolve) => {
-    loadScript('https://apis.google.com/js/api.js').then(() => {
-      window.gapi.load('client', async () => {
-        try {
-          await window.gapi.client.init({
-            apiKey: YOUTUBE_API_KEY,
-            discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
-          });
-          resolve(true); // Client di YouTube caricato con successo
-        } catch (err) {
-          console.error("Errore durante l'inizializzazione del client GAPI:", err);
-          resolve(false);
-        }
-      });
-    }).catch(err => {
-      console.error(err.message);
-      resolve(false);
-    });
   });
 };
 
@@ -117,24 +94,34 @@ function AppContent() {
   const [userProfile, setUserProfile] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const tokenClient = useRef(null);
-  const [isApiReady, setIsApiReady] = useState(false); // Nuovo stato per un controllo più preciso
+  const [isApiReady, setIsApiReady] = useState(false);
 
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
-  // Caricamento e inizializzazione di tutte le librerie
   useEffect(() => {
-    let gisScript;
-    let cleanupInterval;
-  
-    const initGis = () => {
-      gisScript = document.createElement('script');
-      gisScript.src = 'https://accounts.google.com/gsi/client';
-      gisScript.async = true;
-      gisScript.onload = () => {
-        if (!CLIENT_ID) {
-          console.error("CLIENT_ID non definito. Controlla il tuo file .env");
-          return;
-        }
+    const initGoogleApis = async () => {
+      try {
+        // Carica la libreria gapi
+        await loadScript('https://apis.google.com/js/api.js');
+        
+        // Inizializza il client GAPI
+        await new Promise((resolve, reject) => {
+          window.gapi.load('client', () => {
+            window.gapi.client.init({
+              apiKey: YOUTUBE_API_KEY,
+              discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
+            }).then(() => {
+              setIsApiReady(true);
+              console.log("GAPI Client e API di YouTube pronti per l'uso!");
+              resolve();
+            }).catch(reject);
+          });
+        });
+
+        // Carica la libreria GIS
+        await loadScript('https://accounts.google.com/gsi/client');
+
+        // Inizializza il client GIS
         tokenClient.current = window.google.accounts.oauth2.initTokenClient({
           client_id: CLIENT_ID,
           scope: SCOPES,
@@ -142,11 +129,10 @@ function AppContent() {
             if (tokenResponse && tokenResponse.access_token) {
               setAccessToken(tokenResponse.access_token);
               setIsSignedIn(true);
-              if (window.gapi && window.gapi.client) {
-                window.gapi.client.setToken({ access_token: tokenResponse.access_token });
-              }
+              window.gapi.client.setToken({ access_token: tokenResponse.access_token });
+              
               // Recupera il profilo solo se le API sono pronte
-              if (isApiReady && window.gapi.client.youtube) {
+              if (isApiReady) {
                 window.gapi.client.youtube.channels.list({
                   'part': ['snippet'],
                   'mine': true
@@ -166,29 +152,20 @@ function AppContent() {
           },
         });
         console.log("GIS Client caricato.");
-      };
-      document.body.appendChild(gisScript);
-    };
-  
-    // Carica il client GAPI per primo, poi GIS
-    loadGapiClient().then(success => {
-      if (success) {
-        setIsApiReady(true);
-        console.log("GAPI Client e API di YouTube pronti per l'uso!");
-        initGis();
-      } else {
-        setError("Impossibile caricare le API di Google. Riprova più tardi.");
+      } catch (err) {
+        console.error("Errore nel caricamento degli script di Google:", err);
+        setError("Impossibile caricare gli script di Google.");
       }
-    });
+    };
 
-    return () => {
-      if (gisScript && document.body.contains(gisScript)) {
-        document.body.removeChild(gisScript);
-      }
-      if (cleanupInterval) {
-        clearInterval(cleanupInterval);
-      }
+    initGoogleApis();
+
+    const fetchFavoritesOnLoad = async () => {
+      const favs = await getFavorites();
+      setFavorites(favs);
     };
+    fetchFavoritesOnLoad();
+    
   }, [isApiReady]);
   
 
@@ -240,13 +217,6 @@ function AppContent() {
     loadData(activeSection);
   }, [activeSection, currentViewedPlaylistId]);
 
-  useEffect(() => {
-    const fetchFavoritesOnLoad = async () => {
-      const favs = await getFavorites();
-      setFavorites(favs);
-    };
-    fetchFavoritesOnLoad();
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -262,6 +232,7 @@ function AppContent() {
       setError('Devi prima accedere con il tuo account Google.');
       return;
     }
+    // CONTROLLO FONDAMENTALE: l'API deve essere pronta
     if (!isApiReady || !window.gapi.client.youtube) {
       setError('Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.');
       return;
@@ -371,20 +342,20 @@ function AppContent() {
   };
 
   const handleClosePlayer = () => {
-    if (playerInstance) {
-      playerInstance.stopVideo();
-    }
-    setPlayingVideoId(null);
-    setCurrentPlayingTitle('');
-    setIsPlaying(false);
-    setVideoCurrentTime(0);
-    setVideoDuration(0);
-    setCurrentPlaylistPlayingId(null);
-    setCurrentPlaylistVideos([]);
-    setCurrentPlaylistIndex(0);
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
+      if (playerInstance) {
+          playerInstance.stopVideo();
+      }
+      setPlayingVideoId(null);
+      setCurrentPlayingTitle('');
+      setIsPlaying(false);
+      setVideoCurrentTime(0);
+      setVideoDuration(0);
+      setCurrentPlaylistPlayingId(null);
+      setCurrentPlaylistVideos([]);
+      setCurrentPlaylistIndex(0);
+      if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+      }
   };
 
   const playPlaylist = async (playlistId) => {
