@@ -85,7 +85,7 @@ function AppContent() {
   const [userProfile, setUserProfile] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const tokenClient = useRef(null);
-  const [isApiReady, setIsApiReady] = useState(false); // Nuovo stato per monitorare la prontezza di GAPI
+  const [isApiReady, setIsApiReady] = useState(false); // Stato per monitorare la prontezza di GAPI
 
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
@@ -93,21 +93,19 @@ function AppContent() {
   useEffect(() => {
     let gapiScript, gisScript;
   
-    const handleClientLoad = () => {
-      // Inizializza il client di Google
-      window.gapi.client.init({
-        apiKey: YOUTUBE_API_KEY,
-        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
-      }).then(() => {
-        setIsApiReady(true);
-        console.log("GAPI Client pronto!");
-      }).catch(err => {
-        console.error("Errore durante l'inizializzazione del client GAPI:", err);
-      });
-    };
-  
     const loadGapi = () => {
-      window.gapi.load('client', handleClientLoad);
+      window.gapi.load('client', async () => {
+        try {
+          await window.gapi.client.init({
+            apiKey: YOUTUBE_API_KEY,
+            discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
+          });
+          setIsApiReady(true);
+          console.log("GAPI Client pronto!");
+        } catch (err) {
+          console.error("Errore durante l'inizializzazione del client GAPI:", err);
+        }
+      });
     };
   
     const loadGis = () => {
@@ -151,14 +149,12 @@ function AppContent() {
     gapiScript = document.createElement('script');
     gapiScript.src = 'https://apis.google.com/js/api.js';
     gapiScript.async = true;
-    gapiScript.defer = true;
     gapiScript.onload = loadGapi;
     document.body.appendChild(gapiScript);
   
     gisScript = document.createElement('script');
     gisScript.src = 'https://accounts.google.com/gsi/client';
     gisScript.async = true;
-    gisScript.defer = true;
     gisScript.onload = loadGis;
     document.body.appendChild(gisScript);
   
@@ -168,7 +164,6 @@ function AppContent() {
     };
   }, [isApiReady]);
   
-
   const handleGoogleAuthClick = () => {
     if (tokenClient.current) {
       tokenClient.current.requestAccessToken();
@@ -235,7 +230,7 @@ function AppContent() {
       setError('Devi prima accedere con il tuo account Google.');
       return;
     }
-    if (!isApiReady) {
+    if (!isApiReady || !window.gapi.client.youtube) {
       setError('Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.');
       return;
     }
@@ -587,6 +582,7 @@ function AppContent() {
         userProfile={userProfile}
         handleGoogleAuthClick={handleGoogleAuthClick}
         handleSignOut={handleSignOut}
+        isSearchDisabled={isSearchDisabled}
       />
 
       <main className="w-full max-w-2xl flex-grow mb-4">
