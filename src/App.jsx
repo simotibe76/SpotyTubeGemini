@@ -98,74 +98,82 @@ function AppContent() {
 
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
-  useEffect(() => {
-    const initGoogleApis = async () => {
-      try {
-        await loadScript('https://apis.google.com/js/api.js');
-        await new Promise((resolve, reject) => {
-          window.gapi.load('client', () => {
-            window.gapi.client.init({
-              apiKey: YOUTUBE_API_KEY,
-              discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
-            }).then(() => {
-              setIsApiReady(true);
-              console.log("GAPI Client e API di YouTube pronti per l'uso!");
-              resolve();
-            }).catch(reject);
-          });
+  const initGoogleApis = async () => {
+    try {
+      await loadScript('https://apis.google.com/js/api.js');
+      await new Promise((resolve, reject) => {
+        window.gapi.load('client', () => {
+          window.gapi.client.init({
+            apiKey: YOUTUBE_API_KEY,
+            discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
+          }).then(() => {
+            setIsApiReady(true);
+            console.log("GAPI Client e API di YouTube pronti per l'uso!");
+            resolve();
+          }).catch(reject);
         });
+      });
 
-        await loadScript('https://accounts.google.com/gsi/client');
-        tokenClient.current = window.google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: SCOPES,
-          callback: (tokenResponse) => {
-            if (tokenResponse && tokenResponse.access_token) {
-              setAccessToken(tokenResponse.access_token);
-              setIsSignedIn(true);
-              window.gapi.client.setToken({ access_token: tokenResponse.access_token });
-              
-              if (isApiReady) {
-                window.gapi.client.youtube.channels.list({
-                  'part': ['snippet'],
-                  'mine': true
-                }).then(response => {
-                  if (response.result.items.length > 0) {
-                    const profile = response.result.items[0].snippet;
-                    setUserProfile({
-                      name: profile.title,
-                      imageUrl: profile.thumbnails.default.url
-                    });
-                  }
-                }).catch(err => {
-                  console.error("Errore nel recupero del profilo YouTube:", err);
-                });
-              }
+      await loadScript('https://accounts.google.com/gsi/client');
+      tokenClient.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            setAccessToken(tokenResponse.access_token);
+            setIsSignedIn(true);
+            window.gapi.client.setToken({ access_token: tokenResponse.access_token });
+            
+            if (isApiReady) {
+              window.gapi.client.youtube.channels.list({
+                'part': ['snippet'],
+                'mine': true
+              }).then(response => {
+                if (response.result.items.length > 0) {
+                  const profile = response.result.items[0].snippet;
+                  setUserProfile({
+                    name: profile.title,
+                    imageUrl: profile.thumbnails.default.url
+                  });
+                }
+              }).catch(err => {
+                console.error("Errore nel recupero del profilo YouTube:", err);
+              });
             }
-          },
-        });
-        console.log("GIS Client caricato.");
-      } catch (err) {
-        console.error("Errore nel caricamento degli script di Google:", err);
-        setError("Impossibile caricare gli script di Google.");
-      }
-    };
+          }
+        },
+      });
+      console.log("GIS Client caricato.");
+    } catch (err) {
+      console.error("Errore nel caricamento degli script di Google:", err);
+      setError("Impossibile caricare gli script di Google.");
+    }
+  };
 
-    initGoogleApis();
-
+  useEffect(() => {
+    // Solo dati del DB, niente API di Google
     const fetchFavoritesOnLoad = async () => {
       const favs = await getFavorites();
       setFavorites(favs);
     };
     fetchFavoritesOnLoad();
     
-  }, [isApiReady]);
-  
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
 
-  const handleGoogleAuthClick = () => {
+
+  useEffect(() => {
+    loadData(activeSection);
+  }, [activeSection, currentViewedPlaylistId]);
+  
+  const handleGoogleAuthClick = async () => {
     if (!isApiReady) {
-      setError("Le API di Google non sono ancora pronte. Riprova tra qualche istante.");
-      return;
+      // Carica le API solo al primo click
+      await initGoogleApis();
     }
     if (tokenClient.current) {
       tokenClient.current.requestAccessToken();
@@ -179,6 +187,7 @@ function AppContent() {
         setIsSignedIn(false);
         setUserProfile(null);
         window.gapi.client.setToken(null);
+        setIsApiReady(false); // Resetta lo stato delle API
       });
     }
   };
@@ -206,18 +215,6 @@ function AppContent() {
     }
   };
 
-  useEffect(() => {
-    loadData(activeSection);
-  }, [activeSection, currentViewedPlaylistId]);
-
-
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, []);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -226,7 +223,7 @@ function AppContent() {
       return;
     }
     if (!isApiReady || !window.gapi.client.youtube) {
-      setError('Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.');
+      setError('Le API di Google non sono ancora pronte. Riprova tra qualche istante.');
       return;
     }
     if (!searchTerm.trim()) return;
