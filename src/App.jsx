@@ -1,5 +1,5 @@
 // src/App.jsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 
 // Importazioni Icone
@@ -97,10 +97,14 @@ function AppContent() {
   const [isApiReady, setIsApiReady] = useState(false);
 
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
-
-  const initGoogleApis = async () => {
+  
+  // Funzione per inizializzare le API e gestire l'autenticazione
+  const initGoogleApisAndAuth = useCallback(async () => {
     try {
+      // Carica la libreria gapi
       await loadScript('https://apis.google.com/js/api.js');
+      
+      // Inizializza il client GAPI
       await new Promise((resolve, reject) => {
         window.gapi.load('client', () => {
           window.gapi.client.init({
@@ -114,7 +118,10 @@ function AppContent() {
         });
       });
 
+      // Carica la libreria GIS
       await loadScript('https://accounts.google.com/gsi/client');
+
+      // Inizializza il client GIS
       tokenClient.current = window.google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
@@ -124,7 +131,7 @@ function AppContent() {
             setIsSignedIn(true);
             window.gapi.client.setToken({ access_token: tokenResponse.access_token });
             
-            if (isApiReady) {
+            if (window.gapi.client.youtube) {
               window.gapi.client.youtube.channels.list({
                 'part': ['snippet'],
                 'mine': true
@@ -148,10 +155,9 @@ function AppContent() {
       console.error("Errore nel caricamento degli script di Google:", err);
       setError("Impossibile caricare gli script di Google.");
     }
-  };
+  }, []);
 
   useEffect(() => {
-    // Solo dati del DB, niente API di Google
     const fetchFavoritesOnLoad = async () => {
       const favs = await getFavorites();
       setFavorites(favs);
@@ -172,8 +178,7 @@ function AppContent() {
   
   const handleGoogleAuthClick = async () => {
     if (!isApiReady) {
-      // Carica le API solo al primo click
-      await initGoogleApis();
+      await initGoogleApisAndAuth();
     }
     if (tokenClient.current) {
       tokenClient.current.requestAccessToken();
@@ -460,7 +465,7 @@ function AppContent() {
         if (updatedPlaylist.videos.length === 0) {
           handleClosePlayer();
         } else {
-          playNextVideo();
+            playNextVideo();
         }
       } else {
         // Se il video rimosso non era quello corrente, ma l'indice corrente è ora fuori dai limiti
