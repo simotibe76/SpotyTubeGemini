@@ -119,7 +119,6 @@ function AppContent() {
         tokenClient.current = window.google.accounts.oauth2.initTokenClient({
           client_id: CLIENT_ID,
           scope: SCOPES,
-          redirect_uri: window.location.origin,
           callback: (tokenResponse) => {
             if (tokenResponse && tokenResponse.access_token) {
               setAccessToken(tokenResponse.access_token);
@@ -177,7 +176,7 @@ function AppContent() {
       return;
     }
     if (tokenClient.current) {
-      tokenClient.current.requestCode();
+      tokenClient.current.requestAccessToken();
     }
   };
 
