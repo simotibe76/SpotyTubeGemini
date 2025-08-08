@@ -85,30 +85,30 @@ function AppContent() {
   const [userProfile, setUserProfile] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const tokenClient = useRef(null);
-  const [isApiReady, setIsApiReady] = useState(false); // Stato per monitorare la prontezza di GAPI
+  const [isApiReady, setIsApiReady] = useState(false);
 
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
-  // Caricamento delle librerie di Google e inizializzazione
   useEffect(() => {
-    let gapiScript, gisScript;
-  
-    const loadGapi = () => {
+    const scriptGapi = document.createElement('script');
+    scriptGapi.src = 'https://apis.google.com/js/api.js';
+    scriptGapi.async = true;
+    scriptGapi.onload = () => {
       window.gapi.load('client', async () => {
-        try {
-          await window.gapi.client.init({
-            apiKey: YOUTUBE_API_KEY,
-            discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
-          });
-          setIsApiReady(true);
-          console.log("GAPI Client pronto!");
-        } catch (err) {
-          console.error("Errore durante l'inizializzazione del client GAPI:", err);
-        }
+        await window.gapi.client.init({
+          apiKey: YOUTUBE_API_KEY,
+          discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
+        });
+        setIsApiReady(true);
+        console.log("GAPI Client e API di YouTube pronti per l'uso!");
       });
     };
-  
-    const loadGis = () => {
+    document.body.appendChild(scriptGapi);
+
+    const scriptGis = document.createElement('script');
+    scriptGis.src = 'https://accounts.google.com/gsi/client';
+    scriptGis.async = true;
+    scriptGis.onload = () => {
       if (!CLIENT_ID) {
         console.error("CLIENT_ID non definito. Controlla il tuo file .env");
         return;
@@ -121,9 +121,8 @@ function AppContent() {
             setAccessToken(tokenResponse.access_token);
             setIsSignedIn(true);
             window.gapi.client.setToken({ access_token: tokenResponse.access_token });
-  
-            // Recupera il profilo utente solo se le API sono pronte
-            if (isApiReady && window.gapi.client.youtube) {
+            
+            if (window.gapi.client.youtube) {
               window.gapi.client.youtube.channels.list({
                 'part': ['snippet'],
                 'mine': true
@@ -138,32 +137,21 @@ function AppContent() {
               }).catch(err => {
                 console.error("Errore nel recupero del profilo YouTube:", err);
               });
-            } else {
-              console.warn("API non ancora pronte. Il recupero del profilo sarà ignorato fino al prossimo login o refresh.");
             }
           }
         },
       });
+      console.log("GIS Client caricato.");
     };
-  
-    gapiScript = document.createElement('script');
-    gapiScript.src = 'https://apis.google.com/js/api.js';
-    gapiScript.async = true;
-    gapiScript.onload = loadGapi;
-    document.body.appendChild(gapiScript);
-  
-    gisScript = document.createElement('script');
-    gisScript.src = 'https://accounts.google.com/gsi/client';
-    gisScript.async = true;
-    gisScript.onload = loadGis;
-    document.body.appendChild(gisScript);
-  
+    document.body.appendChild(scriptGis);
+
     return () => {
-      if (gapiScript) document.body.removeChild(gapiScript);
-      if (gisScript) document.body.removeChild(gisScript);
+      document.body.removeChild(scriptGapi);
+      document.body.removeChild(scriptGis);
     };
-  }, [isApiReady]);
+  }, []);
   
+
   const handleGoogleAuthClick = () => {
     if (tokenClient.current) {
       tokenClient.current.requestAccessToken();
