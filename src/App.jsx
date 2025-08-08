@@ -88,15 +88,15 @@ function AppContent() {
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const intervalRef = useRef(null);
+  const tokenClient = useRef(null);
 
   // STATI E REF PER GOOGLE API E AUTENTICAZIONE
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
-  const gisLoaded = useRef(false);
-  const gapiLoaded = useRef(false);
+  const [isApiReady, setIsApiReady] = useState(false);
 
-  const isSearchDisabled = !isSignedIn || loading || !gapiLoaded.current || !gisLoaded.current;
+  const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
   useEffect(() => {
     const initGoogleApis = async () => {
@@ -108,7 +108,7 @@ function AppContent() {
               apiKey: YOUTUBE_API_KEY,
               discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
             }).then(() => {
-              gapiLoaded.current = true;
+              setIsApiReady(true);
               console.log("GAPI Client e API di YouTube pronti per l'uso!");
               resolve();
             }).catch(reject);
@@ -116,7 +116,35 @@ function AppContent() {
         });
 
         await loadScript('https://accounts.google.com/gsi/client');
-        gisLoaded.current = true;
+        tokenClient.current = window.google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          prompt: '',
+          callback: (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              setAccessToken(tokenResponse.access_token);
+              setIsSignedIn(true);
+              window.gapi.client.setToken({ access_token: tokenResponse.access_token });
+              
+              if (window.gapi.client.youtube) {
+                window.gapi.client.youtube.channels.list({
+                  'part': ['snippet'],
+                  'mine': true
+                }).then(response => {
+                  if (response.result.items.length > 0) {
+                    const profile = response.result.items[0].snippet;
+                    setUserProfile({
+                      name: profile.title,
+                      imageUrl: profile.thumbnails.default.url
+                    });
+                  }
+                }).catch(err => {
+                  console.error("Errore nel recupero del profilo YouTube:", err);
+                });
+              }
+            }
+          },
+        });
         console.log("GIS Client caricato.");
       } catch (err) {
         console.error("Errore nel caricamento degli script di Google:", err);
@@ -144,48 +172,13 @@ function AppContent() {
   }, [activeSection, currentViewedPlaylistId]);
   
   const handleGoogleAuthClick = () => {
-    if (!gapiLoaded.current || !gisLoaded.current) {
+    if (!isApiReady) {
       setError("Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.");
       return;
     }
-    
-    // Inizializza e avvia il flusso di autenticazione con redirect
-    const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (tokenResponse) => {
-            if (tokenResponse && tokenResponse.access_token) {
-                setAccessToken(tokenResponse.access_token);
-                setIsSignedIn(true);
-                window.gapi.client.setToken({ access_token: tokenResponse.access_token });
-                
-                if (window.gapi.client.youtube) {
-                    window.gapi.client.youtube.channels.list({
-                        'part': ['snippet'],
-                        'mine': true
-                    }).then(response => {
-                        if (response.result.items.length > 0) {
-                            const profile = response.result.items[0].snippet;
-                            setUserProfile({
-                                name: profile.title,
-                                imageUrl: profile.thumbnails.default.url
-                            });
-                        }
-                    }).catch(err => {
-                        console.error("Errore nel recupero del profilo YouTube:", err);
-                    });
-                }
-            } else {
-                console.error("Autenticazione fallita:", tokenResponse);
-            }
-        },
-        error_callback: (error) => {
-            console.error("Errore di autenticazione:", error);
-            setError("Errore durante l'accesso. Riprova.");
-        }
-    });
-
-    tokenClient.requestAccessToken();
+    if (tokenClient.current) {
+      tokenClient.current.requestAccessToken();
+    }
   };
 
   const handleSignOut = () => {
@@ -228,7 +221,7 @@ function AppContent() {
       setError('Devi prima accedere con il tuo account Google.');
       return;
     }
-    if (!gapiLoaded.current || !window.gapi.client.youtube) {
+    if (!isApiReady || !window.gapi.client.youtube) {
       setError('Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.');
       return;
     }
