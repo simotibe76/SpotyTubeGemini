@@ -1,6 +1,5 @@
 // src/App.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
-import axios from 'axios';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 
 // Importazioni Icone
@@ -24,7 +23,7 @@ import HistoryList from './components/HistoryList';
 import PlaylistsOverview from './components/PlaylistsOverview';
 import PlaylistDetail from './components/PlaylistDetail';
 
-// Importazioni funzioni del database locale (Dexie)
+// Importazioni funzioni del database locale
 import {
   addFavorite,
   removeFavorite,
@@ -43,7 +42,6 @@ import {
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
-const BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
 const SECTIONS = {
   SEARCH: 'search',
@@ -82,24 +80,24 @@ function AppContent() {
   const [isSeeking, setIsSeeking] = useState(false);
   const intervalRef = useRef(null);
 
-  // STATI PER GOOGLE API E AUTENTICAZIONE
-  const [gapiInitialized, setGapiInitialized] = useState(false);
-  const [gisLoaded, setGisLoaded] = useState(false);
+  // STATI E REF PER GOOGLE API E AUTENTICAZIONE
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const tokenClient = useRef(null);
+  const gapiLoaded = useRef(false);
+
+  const isSearchDisabled = !isSignedIn || loading;
 
   // Caricamento delle librerie di Google per l'autenticazione
   useEffect(() => {
     const loadGapi = () => {
       window.gapi.load('client', async () => {
-        // Inizializza il client per le API di YouTube
         await window.gapi.client.init({
           apiKey: YOUTUBE_API_KEY,
           discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
         });
-        setGapiInitialized(true);
+        gapiLoaded.current = true;
       });
     };
 
@@ -117,8 +115,7 @@ function AppContent() {
             setIsSignedIn(true);
             window.gapi.client.setToken({ access_token: tokenResponse.access_token });
             
-            // Verifica che il client di YouTube sia inizializzato prima di fare la chiamata
-            if (window.gapi.client.youtube) {
+            if (gapiLoaded.current && window.gapi.client.youtube) {
               window.gapi.client.youtube.channels.list({
                 'part': ['snippet'],
                 'mine': true
@@ -139,7 +136,6 @@ function AppContent() {
           }
         },
       });
-      setGisLoaded(true);
     };
 
     const scriptGapi = document.createElement('script');
@@ -219,47 +215,46 @@ function AppContent() {
   }, []);
 
   const handleSearch = async (e) => {
-  e.preventDefault();
-  // Nuovo controllo più robusto:
-  if (!isSignedIn || !gapiInitialized || !window.gapi.client.youtube) {
-    setError('Devi prima accedere e attendere che le API siano caricate.');
-    return;
-  }
-  if (!searchTerm.trim()) return;
-
-  setLoading(true);
-  setError(null);
-  setSearchResults([]);
-  setActiveSection(SECTIONS.SEARCH);
-  setCurrentViewedPlaylistId(null);
-
-  try {
-    const response = await window.gapi.client.Youtube.list({
-      part: 'snippet',
-      q: searchTerm,
-      type: 'video',
-      maxResults: 10,
-    });
-
-    const videos = response.result.items.filter(item => item.id.kind === 'youtube#video');
-    const formattedVideos = videos.map(video => ({
-      videoId: video.id.videoId,
-      title: video.snippet.title,
-      channelTitle: video.snippet.channelTitle,
-      thumbnail: video.snippet.thumbnails.default.url,
-    }));
-    setSearchResults(formattedVideos);
-  } catch (err) {
-    console.error("Error during search:", err);
-    if (err.result && err.result.error && err.result.error.code === 403) {
-      setError("Errore 403: La chiave API non è valida o non ha i permessi necessari.");
-    } else {
-      setError("Si è verificato un errore durante la ricerca. Riprova più tardi.");
+    e.preventDefault();
+    if (!isSignedIn || !gapiLoaded.current || !window.gapi.client.youtube) {
+      setError('Devi prima accedere e attendere che le API siano caricate.');
+      return;
     }
-  } finally {
-    setLoading(false);
-  }
-};
+    if (!searchTerm.trim()) return;
+
+    setLoading(true);
+    setError(null);
+    setSearchResults([]);
+    setActiveSection(SECTIONS.SEARCH);
+    setCurrentViewedPlaylistId(null);
+
+    try {
+      const response = await window.gapi.client.Youtube.list({
+        part: 'snippet',
+        q: searchTerm,
+        type: 'video',
+        maxResults: 10,
+      });
+
+      const videos = response.result.items.filter(item => item.id.kind === 'youtube#video');
+      const formattedVideos = videos.map(video => ({
+        videoId: video.id.videoId,
+        title: video.snippet.title,
+        channelTitle: video.snippet.channelTitle,
+        thumbnail: video.snippet.thumbnails.default.url,
+      }));
+      setSearchResults(formattedVideos);
+    } catch (err) {
+      console.error("Error during search:", err);
+      if (err.result && err.result.error && err.result.error.code === 403) {
+        setError("Errore 403: La chiave API non è valida o non ha i permessi necessari.");
+      } else {
+        setError("Si è verificato un errore durante la ricerca. Riprova più tardi.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const playVideo = async (videoData) => {
     setPlayingVideoId(videoData.videoId);
