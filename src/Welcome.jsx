@@ -20,7 +20,7 @@ function Welcome() {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [error, setError] = useState(null);
-  const tokenClient = useRef(null);
+  const [isApiReady, setIsApiReady] = useState(false);
 
   useEffect(() => {
     const initGoogleApis = async () => {
@@ -28,51 +28,18 @@ function Welcome() {
         await loadScript('https://apis.google.com/js/api.js');
         await loadScript('https://accounts.google.com/gsi/client');
         
+        // Inizializza il client per l'API di YouTube
         window.gapi.load('client', () => {
           window.gapi.client.init({
             discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
+          }).then(() => {
+            setIsApiReady(true);
+            console.log("GAPI Client e API di YouTube pronti per l'uso!");
+          }).catch((err) => {
+            console.error("Errore nell'inizializzazione del client GAPI:", err);
+            setError("Impossibile caricare il client API di Google.");
           });
         });
-
-        // Verifichiamo se l'autenticazione è già avvenuta tramite l'URL
-        const params = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = params.get('access_token');
-        
-        if (accessToken) {
-          console.log("Accesso riuscito tramite redirect:", accessToken);
-          setIsSignedIn(true);
-          window.gapi.client.setToken({ access_token: accessToken });
-          
-          if (window.gapi.client.youtube) {
-            window.gapi.client.youtube.channels.list({
-              'part': ['snippet'],
-              'mine': true
-            }).then(response => {
-              if (response.result.items.length > 0) {
-                const profile = response.result.items[0].snippet;
-                setUserProfile({
-                  name: profile.title,
-                  imageUrl: profile.thumbnails.default.url
-                });
-              }
-            }).catch(err => {
-              console.error("Errore nel recupero del profilo YouTube:", err);
-            });
-          }
-          // Rimuovi il token dall'URL per sicurezza e pulizia
-          window.history.pushState("", document.title, window.location.pathname + window.location.search);
-        } else {
-          // Inizializza il client per il token di autenticazione con redirect
-          tokenClient.current = window.google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            redirect_uri: REDIRECT_URI,
-            callback: (tokenResponse) => {
-              // Questa callback non sarà mai chiamata, dato il reindirizzamento.
-              // La gestione avviene tramite i parametri URL.
-            }
-          });
-        }
       } catch (err) {
         console.error("Errore nel caricamento degli script di Google:", err);
         setError("Impossibile caricare gli script di Google.");
@@ -81,11 +48,41 @@ function Welcome() {
     initGoogleApis();
   }, []);
 
-  const handleGoogleAuthClick = () => {
-    if (tokenClient.current) {
-      // Invece di richiedere un token, reindirizziamo l'utente
-      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=token&scope=${SCOPES}`;
+  useEffect(() => {
+    // Gestione dell'autenticazione tramite URL
+    const params = new URLSearchParams(window.location.hash.substring(1));
+    const accessToken = params.get('access_token');
+    
+    if (accessToken && isApiReady) {
+      console.log("Accesso riuscito tramite redirect:", accessToken);
+      setIsSignedIn(true);
+      window.gapi.client.setToken({ access_token: accessToken });
+      
+      if (window.gapi.client.youtube) {
+        window.gapi.client.youtube.channels.list({
+          'part': ['snippet'],
+          'mine': true
+        }).then(response => {
+          if (response.result.items.length > 0) {
+            const profile = response.result.items[0].snippet;
+            setUserProfile({
+              name: profile.title,
+              imageUrl: profile.thumbnails.default.url
+            });
+          }
+        }).catch(err => {
+          console.error("Errore nel recupero del profilo YouTube:", err);
+          setError("Impossibile recuperare il profilo utente.");
+        });
+      }
+      // Rimuovi il token dall'URL per sicurezza e pulizia
+      window.history.pushState("", document.title, window.location.pathname + window.location.search);
     }
+  }, [isApiReady]); // Questo useEffect viene eseguito ogni volta che isApiReady cambia
+
+  const handleGoogleAuthClick = () => {
+    // Reindirizzamento diretto per l'autenticazione
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=token&scope=${SCOPES}`;
   };
   
   const handleSignOut = () => {
