@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
@@ -58,23 +58,28 @@ function Welcome() {
       setIsSignedIn(true);
       window.gapi.client.setToken({ access_token: accessToken });
       
-      if (window.gapi.client.youtube) {
-        window.gapi.client.youtube.channels.list({
-          'part': ['snippet'],
-          'mine': true
-        }).then(response => {
+      const fetchUserProfile = async () => {
+        try {
+          const response = await window.gapi.client.youtube.channels.list({
+            'part': ['snippet'],
+            'mine': true
+          });
           if (response.result.items.length > 0) {
             const profile = response.result.items[0].snippet;
             setUserProfile({
               name: profile.title,
               imageUrl: profile.thumbnails.default.url
             });
+            console.log("Profilo utente recuperato:", profile.title);
           }
-        }).catch(err => {
+        } catch (err) {
           console.error("Errore nel recupero del profilo YouTube:", err);
           setError("Impossibile recuperare il profilo utente.");
-        });
-      }
+        }
+      };
+
+      fetchUserProfile();
+      
       // Rimuovi il token dall'URL per sicurezza e pulizia
       window.history.pushState("", document.title, window.location.pathname + window.location.search);
     }
@@ -115,8 +120,12 @@ function Welcome() {
           </button>
         ) : (
           <div>
-            <p className="text-green-400 font-semibold text-lg mb-4">Accesso riuscito!</p>
-            <p className="text-gray-400">Bentornato, utente!</p>
+            <p className="text-green-400 font-semibold text-lg mb-4">
+              Accesso riuscito!
+            </p>
+            <p className="text-gray-400">
+              Bentornato, <span className="font-bold text-purple-300">{userProfile ? userProfile.name : "Utente"}</span>!
+            </p>
             <button
               onClick={handleSignOut}
               className="mt-4 w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out"
