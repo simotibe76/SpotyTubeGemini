@@ -42,6 +42,7 @@ import {
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
+const REDIRECT_URI = 'https://spotytubegemini.netlify.app';
 
 const SECTIONS = {
   SEARCH: 'search',
@@ -88,8 +89,7 @@ function AppContent() {
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const intervalRef = useRef(null);
-  const tokenClient = useRef(null);
-
+  
   // STATI E REF PER GOOGLE API E AUTENTICAZIONE
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -98,60 +98,30 @@ function AppContent() {
 
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
+  // Caricamento e inizializzazione delle API di Google
   useEffect(() => {
     const initGoogleApis = async () => {
       try {
         await loadScript('https://apis.google.com/js/api.js');
-        await new Promise((resolve, reject) => {
-          window.gapi.load('client', () => {
-            window.gapi.client.init({
-              apiKey: YOUTUBE_API_KEY,
-              discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
-            }).then(() => {
-              setIsApiReady(true);
-              console.log("GAPI Client e API di YouTube pronti per l'uso!");
-              resolve();
-            }).catch(reject);
+        await loadScript('https://accounts.google.com/gsi/client');
+        
+        window.gapi.load('client', () => {
+          window.gapi.client.init({
+            apiKey: YOUTUBE_API_KEY,
+            discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
+          }).then(() => {
+            setIsApiReady(true);
+            console.log("GAPI Client e API di YouTube pronti per l'uso!");
+          }).catch((err) => {
+            console.error("Errore nell'inizializzazione del client GAPI:", err);
+            setError("Impossibile caricare il client API di Google.");
           });
         });
-
-        await loadScript('https://accounts.google.com/gsi/client');
-        tokenClient.current = window.google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: SCOPES,
-          prompt: '',
-          callback: (tokenResponse) => {
-            if (tokenResponse && tokenResponse.access_token) {
-              setAccessToken(tokenResponse.access_token);
-              setIsSignedIn(true);
-              window.gapi.client.setToken({ access_token: tokenResponse.access_token });
-              
-              if (window.gapi.client.youtube) {
-                window.gapi.client.youtube.channels.list({
-                  'part': ['snippet'],
-                  'mine': true
-                }).then(response => {
-                  if (response.result.items.length > 0) {
-                    const profile = response.result.items[0].snippet;
-                    setUserProfile({
-                      name: profile.title,
-                      imageUrl: profile.thumbnails.default.url
-                    });
-                  }
-                }).catch(err => {
-                  console.error("Errore nel recupero del profilo YouTube:", err);
-                });
-              }
-            }
-          },
-        });
-        console.log("GIS Client caricato.");
       } catch (err) {
         console.error("Errore nel caricamento degli script di Google:", err);
         setError("Impossibile caricare gli script di Google.");
       }
     };
-
     initGoogleApis();
 
     const fetchFavoritesOnLoad = async () => {
@@ -167,18 +137,48 @@ function AppContent() {
     };
   }, []);
 
+  // Gestione dell'autenticazione e recupero del profilo utente
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.substring(1));
+    const tokenFromUrl = params.get('access_token');
+    
+    if (tokenFromUrl && isApiReady) {
+      setAccessToken(tokenFromUrl);
+      setIsSignedIn(true);
+      window.gapi.client.setToken({ access_token: tokenFromUrl });
+      
+      const fetchUserProfile = async () => {
+        try {
+          const response = await window.gapi.client.youtube.channels.list({
+            'part': ['snippet'],
+            'mine': true
+          });
+          if (response.result.items.length > 0) {
+            const profile = response.result.items[0].snippet;
+            setUserProfile({
+              name: profile.title,
+              imageUrl: profile.thumbnails.default.url
+            });
+            console.log("Profilo utente recuperato:", profile.title);
+          }
+        } catch (err) {
+          console.error("Errore nel recupero del profilo YouTube:", err);
+          setError("Impossibile recuperare il profilo utente.");
+        }
+      };
+
+      fetchUserProfile();
+      
+      window.history.pushState("", document.title, window.location.pathname + window.location.search);
+    }
+  }, [isApiReady]);
+
   useEffect(() => {
     loadData(activeSection);
   }, [activeSection, currentViewedPlaylistId]);
   
   const handleGoogleAuthClick = () => {
-    if (!isApiReady) {
-      setError("Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.");
-      return;
-    }
-    if (tokenClient.current) {
-      tokenClient.current.requestAccessToken();
-    }
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=token&scope=${SCOPES}`;
   };
 
   const handleSignOut = () => {
@@ -503,6 +503,30 @@ function AppContent() {
   };
 
   const renderContent = () => {
+    if (!isSignedIn) {
+      return (
+        <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
+          <div className="bg-gray-800 p-8 rounded-xl shadow-2xl text-center">
+            <h1 className="text-4xl font-extrabold text-purple-400 mb-6">SpotyTube</h1>
+            <p className="text-gray-300 mb-8 max-w-sm mx-auto">
+              Accedi con il tuo account Google per cercare video su YouTube e creare le tue playlist personalizzate.
+            </p>
+            {error && (
+              <div className="bg-red-900 text-red-300 p-3 rounded-lg mb-4">
+                {error}
+              </div>
+            )}
+            <button
+              onClick={handleGoogleAuthClick}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out"
+            >
+              Accedi con Google
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     switch (activeSection) {
       case SECTIONS.SEARCH:
         return (
@@ -580,15 +604,17 @@ function AppContent() {
         {renderContent()}
       </main>
 
-      <Navigation
-        activeSection={activeSection}
-        setActiveSection={setActiveSection}
-        setSearchResults={setSearchResults}
-        isSignedIn={isSignedIn}
-        userProfile={userProfile}
-        handleGoogleAuthClick={handleGoogleAuthClick}
-        handleSignOut={handleSignOut}
-      />
+      {isSignedIn && (
+        <Navigation
+          activeSection={activeSection}
+          setActiveSection={setActiveSection}
+          setSearchResults={setSearchResults}
+          isSignedIn={isSignedIn}
+          userProfile={userProfile}
+          handleGoogleAuthClick={handleGoogleAuthClick}
+          handleSignOut={handleSignOut}
+        />
+      )}
 
       {playingVideoId && (
         <PlayerControls
