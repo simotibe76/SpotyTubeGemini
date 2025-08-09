@@ -30,7 +30,7 @@ function Welcome() {
         // Inizializza il client per l'API di YouTube
         window.gapi.load('client', () => {
           window.gapi.client.init({
-            apiKey: 'YOUR_API_KEY_HERE', // Non serve per il login ma è buona prassi
+            // Rimuovi la riga apiKey
             discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
           });
         });
