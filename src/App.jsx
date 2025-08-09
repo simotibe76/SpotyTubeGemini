@@ -90,7 +90,7 @@ function AppContent() {
   const [isSeeking, setIsSeeking] = useState(false);
   const intervalRef = useRef(null);
   
-  // STATI E REF PER GOOGLE API E AUTENTICAZIONE
+  // STATI PER GOOGLE API E AUTENTICAZIONE
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
@@ -98,7 +98,7 @@ function AppContent() {
 
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
-  // Caricamento e inizializzazione delle API di Google
+  // Caricamento e inizializzazione delle API di Google e dati iniziali
   useEffect(() => {
     const initGoogleApis = async () => {
       try {
@@ -137,7 +137,7 @@ function AppContent() {
     };
   }, []);
 
-  // Gestione dell'autenticazione e recupero del profilo utente
+  // Gestione dell'autenticazione tramite URL e recupero del profilo utente
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.substring(1));
     const tokenFromUrl = params.get('access_token');
@@ -174,8 +174,10 @@ function AppContent() {
   }, [isApiReady]);
 
   useEffect(() => {
-    loadData(activeSection);
-  }, [activeSection, currentViewedPlaylistId]);
+    if (isSignedIn) {
+      loadData(activeSection);
+    }
+  }, [activeSection, currentViewedPlaylistId, isSignedIn]);
   
   const handleGoogleAuthClick = () => {
     window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=token&scope=${SCOPES}`;
@@ -221,10 +223,14 @@ function AppContent() {
       setError('Devi prima accedere con il tuo account Google.');
       return;
     }
+    
+    // Controllo robusto per l'API di YouTube
     if (!isApiReady || !window.gapi.client.youtube) {
       setError('Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.');
+      console.log("Stato delle API:", { isApiReady, gapiClient: !!window.gapi.client, gapiYoutube: !!window.gapi.client.youtube });
       return;
     }
+    
     if (!searchTerm.trim()) return;
 
     setLoading(true);
