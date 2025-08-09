@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
+const REDIRECT_URI = 'https://spotytubegemini.netlify.app'; // Sostituisci con l'URL della tua applicazione
 
 // Funzione per caricare script con Promise
 const loadScript = (src) => {
@@ -27,34 +28,51 @@ function Welcome() {
         await loadScript('https://apis.google.com/js/api.js');
         await loadScript('https://accounts.google.com/gsi/client');
         
-        // Inizializza il client per l'API di YouTube
         window.gapi.load('client', () => {
           window.gapi.client.init({
-            // Rimuovi la riga apiKey
             discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
           });
         });
 
-        // Inizializza il client per il token di autenticazione
-        tokenClient.current = window.google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: SCOPES,
-          callback: (tokenResponse) => {
-            if (tokenResponse && tokenResponse.access_token) {
-              console.log("Accesso riuscito:", tokenResponse);
-              setIsSignedIn(true);
-              // Recupera il profilo utente
-              // Nota: gapi.client.youtube non è ancora pronto qui
-              // ma possiamo usare il token per una chiamata REST diretta
-              // se non vogliamo aspettare il caricamento completo.
-            } else {
-              console.error("Accesso fallito:", tokenResponse);
-              setError("Accesso fallito. Riprova.");
-              setIsSignedIn(false);
+        // Verifichiamo se l'autenticazione è già avvenuta tramite l'URL
+        const params = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = params.get('access_token');
+        
+        if (accessToken) {
+          console.log("Accesso riuscito tramite redirect:", accessToken);
+          setIsSignedIn(true);
+          window.gapi.client.setToken({ access_token: accessToken });
+          
+          if (window.gapi.client.youtube) {
+            window.gapi.client.youtube.channels.list({
+              'part': ['snippet'],
+              'mine': true
+            }).then(response => {
+              if (response.result.items.length > 0) {
+                const profile = response.result.items[0].snippet;
+                setUserProfile({
+                  name: profile.title,
+                  imageUrl: profile.thumbnails.default.url
+                });
+              }
+            }).catch(err => {
+              console.error("Errore nel recupero del profilo YouTube:", err);
+            });
+          }
+          // Rimuovi il token dall'URL per sicurezza e pulizia
+          window.history.pushState("", document.title, window.location.pathname + window.location.search);
+        } else {
+          // Inizializza il client per il token di autenticazione con redirect
+          tokenClient.current = window.google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            redirect_uri: REDIRECT_URI,
+            callback: (tokenResponse) => {
+              // Questa callback non sarà mai chiamata, dato il reindirizzamento.
+              // La gestione avviene tramite i parametri URL.
             }
-          },
-        });
-
+          });
+        }
       } catch (err) {
         console.error("Errore nel caricamento degli script di Google:", err);
         setError("Impossibile caricare gli script di Google.");
@@ -65,7 +83,8 @@ function Welcome() {
 
   const handleGoogleAuthClick = () => {
     if (tokenClient.current) {
-      tokenClient.current.requestAccessToken();
+      // Invece di richiedere un token, reindirizziamo l'utente
+      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=token&scope=${SCOPES}`;
     }
   };
   
