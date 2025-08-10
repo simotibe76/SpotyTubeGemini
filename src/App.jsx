@@ -233,14 +233,14 @@ function AppContent() {
 
     if (!searchTerm.trim()) return;
 
-    setLoading(true);
+    setLoading(true);window.gapi.client.Youtube.list
     setError(null);
     setSearchResults([]);
     setActiveSection(SECTIONS.SEARCH);
     setCurrentViewedPlaylistId(null);
 
     try {
-      const response = await window.gapi.client.Youtube.list({
+      const response = await window.gapi.client.youtube.search.list({
         part: 'snippet',
         q: searchTerm,
         type: 'video',
