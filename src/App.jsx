@@ -219,7 +219,7 @@ function AppContent() {
     }
   };
 
- const handleSearch = async (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
     if (!isSignedIn) {
       setError('Devi prima accedere con il tuo account Google.');
@@ -269,6 +269,7 @@ function AppContent() {
       setLoading(false);
     }
   };
+
   const playVideo = async (videoData) => {
     setPlayingVideoId(videoData.videoId);
     setCurrentPlayingTitle(videoData.title);
