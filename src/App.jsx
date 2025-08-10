@@ -89,7 +89,7 @@ function AppContent() {
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const intervalRef = useRef(null);
-  
+
   // STATI PER GOOGLE API E AUTENTICAZIONE
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -105,13 +105,14 @@ function AppContent() {
         await loadScript('https://apis.google.com/js/api.js');
         await loadScript('https://accounts.google.com/gsi/client');
         
+        // Inizializzazione di gapi.client
         window.gapi.load('client', () => {
           window.gapi.client.init({
             apiKey: YOUTUBE_API_KEY,
             discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
           }).then(() => {
-            setIsApiReady(true);
             console.log("GAPI Client e API di YouTube pronti per l'uso!");
+            setIsApiReady(true);
           }).catch((err) => {
             console.error("Errore nell'inizializzazione del client GAPI:", err);
             setError("Impossibile caricare il client API di Google.");
@@ -142,6 +143,7 @@ function AppContent() {
     const params = new URLSearchParams(window.location.hash.substring(1));
     const tokenFromUrl = params.get('access_token');
     
+    // Attendiamo che l'API sia pronta prima di usare il token
     if (tokenFromUrl && isApiReady) {
       setAccessToken(tokenFromUrl);
       setIsSignedIn(true);
@@ -224,10 +226,9 @@ function AppContent() {
       return;
     }
     
-    // Controllo robusto per l'API di YouTube
     if (!isApiReady || !window.gapi.client.youtube) {
-      setError('Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.');
-      console.log("Stato delle API:", { isApiReady, gapiClient: !!window.gapi.client, gapiYoutube: !!window.gapi.client.youtube });
+      setError('Le API di Google non sono ancora pronte. Riprova fra qualche istante.');
+      console.error("Tentativo di ricerca fallito: GAPI non è pronto.");
       return;
     }
     
