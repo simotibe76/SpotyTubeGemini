@@ -1,14 +1,4 @@
-Questo è un errore comune che si verifica quando il codice cerca di accedere a un oggetto che non è ancora stato caricato. Anche se il log `GAPI Client e API di YouTube pronti per l'uso!` appare, non è garantito che l'oggetto `window.gapi.client.youtube` sia immediatamente disponibile per le chiamate API. Per risolvere questo problema, la soluzione più efficace è quella di inserire un ulteriore controllo.
 
------
-
-### Soluzione
-
-La soluzione è aggiungere una dipendenza al `useEffect` che gestisce l'inizializzazione del client GAPI e una variabile di stato per garantire che il client sia stato caricato correttamente.
-
-Di seguito trovi il codice aggiornato del file `src/App.jsx` che implementa questa soluzione.
-
-```jsx
 // src/App.jsx
 import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
