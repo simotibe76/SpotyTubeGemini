@@ -89,6 +89,7 @@ function AppContent() {
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const intervalRef = useRef(null);
+  const gapiLoadedRef = useRef(false);
   
   // STATI PER GOOGLE API E AUTENTICAZIONE
   const [isSignedIn, setIsSignedIn] = useState(false);
@@ -111,6 +112,7 @@ function AppContent() {
             discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
           }).then(() => {
             setIsApiReady(true);
+            gapiLoadedRef.current = true;
             console.log("GAPI Client e API di YouTube pronti per l'uso!");
           }).catch((err) => {
             console.error("Errore nell'inizializzazione del client GAPI:", err);
@@ -224,13 +226,13 @@ function AppContent() {
       return;
     }
     
-    // Controllo robusto per l'API di YouTube
-    if (!isApiReady || !window.gapi.client.youtube) {
-      setError('Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.');
-      console.log("Stato delle API:", { isApiReady, gapiClient: !!window.gapi.client, gapiYoutube: !!window.gapi.client.youtube });
+    // Controlliamo che l'API sia pronta
+    if (!gapiLoadedRef.current || !window.gapi.client || !window.gapi.client.youtube) {
+      setError('Le API di Google non sono ancora pronte. Riprova fra qualche istante.');
+      console.error("Tentativo di ricerca fallito: GAPI non è pronto.");
       return;
     }
-    
+
     if (!searchTerm.trim()) return;
 
     setLoading(true);
