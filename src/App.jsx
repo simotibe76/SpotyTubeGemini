@@ -89,8 +89,8 @@ function AppContent() {
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const intervalRef = useRef(null);
-  const gapiLoadedRef = useRef(false);
-  
+  const [isGapiClientLoaded, setIsGapiClientLoaded] = useState(false);
+
   // STATI PER GOOGLE API E AUTENTICAZIONE
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -105,14 +105,14 @@ function AppContent() {
       try {
         await loadScript('https://apis.google.com/js/api.js');
         await loadScript('https://accounts.google.com/gsi/client');
-        
+
         window.gapi.load('client', () => {
           window.gapi.client.init({
             apiKey: YOUTUBE_API_KEY,
             discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest"],
           }).then(() => {
+            setIsGapiClientLoaded(true);
             setIsApiReady(true);
-            gapiLoadedRef.current = true;
             console.log("GAPI Client e API di YouTube pronti per l'uso!");
           }).catch((err) => {
             console.error("Errore nell'inizializzazione del client GAPI:", err);
@@ -131,7 +131,7 @@ function AppContent() {
       setFavorites(favs);
     };
     fetchFavoritesOnLoad();
-    
+
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -143,12 +143,12 @@ function AppContent() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.substring(1));
     const tokenFromUrl = params.get('access_token');
-    
-    if (tokenFromUrl && isApiReady) {
+
+    if (tokenFromUrl && isGapiClientLoaded) {
       setAccessToken(tokenFromUrl);
       setIsSignedIn(true);
       window.gapi.client.setToken({ access_token: tokenFromUrl });
-      
+
       const fetchUserProfile = async () => {
         try {
           const response = await window.gapi.client.youtube.channels.list({
@@ -170,17 +170,17 @@ function AppContent() {
       };
 
       fetchUserProfile();
-      
+
       window.history.pushState("", document.title, window.location.pathname + window.location.search);
     }
-  }, [isApiReady]);
+  }, [isGapiClientLoaded]);
 
   useEffect(() => {
     if (isSignedIn) {
       loadData(activeSection);
     }
   }, [activeSection, currentViewedPlaylistId, isSignedIn]);
-  
+
   const handleGoogleAuthClick = () => {
     window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=token&scope=${SCOPES}`;
   };
@@ -225,11 +225,9 @@ function AppContent() {
       setError('Devi prima accedere con il tuo account Google.');
       return;
     }
-    
-    // Controlliamo che l'API sia pronta
-    if (!gapiLoadedRef.current || !window.gapi.client || !window.gapi.client.youtube) {
-      setError('Le API di Google non sono ancora pronte. Riprova fra qualche istante.');
-      console.error("Tentativo di ricerca fallito: GAPI non è pronto.");
+
+    if (!isGapiClientLoaded) {
+      setError('Le API di Google non sono ancora pronte. Attendi qualche istante e riprova.');
       return;
     }
 
