@@ -219,14 +219,15 @@ function AppContent() {
     }
   };
 
-  const handleSearch = async (e) => {
+ const handleSearch = async (e) => {
     e.preventDefault();
     if (!isSignedIn) {
       setError('Devi prima accedere con il tuo account Google.');
       return;
     }
     
-    if (!isApiReady || !window.gapi.client.youtube) {
+    // Controlliamo che l'API sia pronta E che l'oggetto Youtube esista
+    if (!isApiReady || !window.gapi.client.youtube?.search) {
       setError('Le API di Google non sono ancora pronte. Riprova fra qualche istante.');
       console.error("Tentativo di ricerca fallito: GAPI non è pronto.");
       return;
@@ -241,6 +242,7 @@ function AppContent() {
     setCurrentViewedPlaylistId(null);
 
     try {
+      // La chiamata API è ora sicura
       const response = await window.gapi.client.Youtube.list({
         part: 'snippet',
         q: searchTerm,
@@ -267,7 +269,6 @@ function AppContent() {
       setLoading(false);
     }
   };
-
   const playVideo = async (videoData) => {
     setPlayingVideoId(videoData.videoId);
     setCurrentPlayingTitle(videoData.title);
