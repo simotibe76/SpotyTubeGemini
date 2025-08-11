@@ -638,17 +638,17 @@ function AppContent() {
             openAddToPlaylistModal={openAddToPlaylistModal}
           />
         );
-      case SECTIONS.FAVORITES:
-        return (
-          <FavoritesList
-            favorites={favorites}
-            playVideo={playVideo}
-            handleToggleFavorite={handleToggleFavorite}
-            openAddToPlaylistModal={openAddToPlaylistModal}
-            handleSyncFavoritesYouTube={handleSyncFavoritesYouTube} // NUOVA PROP
-            isSyncingFavorites={isSyncingFavorites} // NUOVA PROP
-          />
-        );
+case SECTIONS.FAVORITES:
+  return (
+    <FavoritesList
+      favorites={favorites}
+      playVideo={playVideo}
+      handleToggleFavorite={handleToggleFavorite}
+      openAddToPlaylistModal={openAddToPlaylistModal}
+      handleSyncFavoritesYouTube={handleSyncFavoritesYouTube} // Passa la nuova funzione
+      isSyncingFavorites={isSyncingFavorites} // Passa il nuovo stato
+    />
+  );
       case SECTIONS.HISTORY:
         return (
           <HistoryList
