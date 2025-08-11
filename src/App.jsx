@@ -509,7 +509,7 @@ function AppContent() {
         setCurrentViewedPlaylistId(null);
 
         try {
-            const response = await window.gapi.client.Youtube.list({
+            const response = await window.gapi.client.youtube.list({
                 part: 'snippet',
                 q: searchTerm,
                 type: 'video',
