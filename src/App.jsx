@@ -645,6 +645,8 @@ function AppContent() {
             playVideo={playVideo}
             handleToggleFavorite={handleToggleFavorite}
             openAddToPlaylistModal={openAddToPlaylistModal}
+            handleSyncFavoritesYouTube={handleSyncFavoritesYouTube} // NUOVA PROP
+            isSyncingFavorites={isSyncingFavorites} // NUOVA PROP
           />
         );
       case SECTIONS.HISTORY:
