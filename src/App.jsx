@@ -86,7 +86,6 @@ function AppContent() {
   const [isSyncingFavorites, setIsSyncingFavorites] = useState(false);
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
   
-  // NOME FISSO PER LA PLAYLIST DEI PREFERITI
   const FAVORITES_PLAYLIST_NAME = "Preferiti da SpotyTube";
 
   useEffect(() => {
@@ -445,7 +444,7 @@ function AppContent() {
     }
   };
   
-const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
+  const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
     let nextPageToken = null;
     do {
       try {
@@ -471,15 +470,12 @@ const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
     } while (nextPageToken);
     return false;
   };
+
+  const delay = (ms) => new Promise(res => setTimeout(res, ms));
   
-  // NUOVA FUNZIONE DI SINCRONIZZAZIONE DEI PREFERITI CON LOGICA "SPOTYTUBE"
   const handleSyncFavoritesYouTube = async () => {
-    if (!isSignedIn) {
-      setError('Devi prima accedere con il tuo account Google per sincronizzare.');
-      return;
-    }
-    if (!isApiReady) {
-      setError('Le API di Google non sono ancora pronte. Riprova tra qualche istante.');
+    if (!isSignedIn || !isApiReady) {
+      setError('Devi prima accedere con il tuo account Google e assicurarti che le API siano pronte.');
       return;
     }
     
@@ -512,6 +508,7 @@ const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
         console.log(`Playlist "${FAVORITES_PLAYLIST_NAME}" non trovata, la sto creando...`);
         const newPlaylistId = await createYouTubePlaylist(FAVORITES_PLAYLIST_NAME);
         youtubePlaylistId = newPlaylistId;
+        await delay(2000); 
       }
       
       if (youtubePlaylistId) {
@@ -534,14 +531,9 @@ const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
     }
   };
   
-  // FUNZIONE DI SINCRONIZZAZIONE DELLE PLAYLIST ESISTENTE - LOGICA "SPOTYTUBE"
   const handleSyncYouTubePlaylists = async () => {
-    if (!isSignedIn) {
-      setError('Devi prima accedere con il tuo account Google per sincronizzare.');
-      return;
-    }
-    if (!isApiReady) {
-      setError('Le API di Google non sono ancora pronte. Riprova tra qualche istante.');
+    if (!isSignedIn || !isApiReady) {
+      setError('Devi prima accedere con il tuo account Google e assicurarti che le API siano pronte.');
       return;
     }
     
@@ -574,6 +566,7 @@ const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
         } else {
           console.log(`Playlist "${youtubePlaylistName}" non trovata, la sto creando...`);
           youtubePlaylistId = await createYouTubePlaylist(youtubePlaylistName);
+          await delay(2000); 
         }
         
         if (youtubePlaylistId) {
