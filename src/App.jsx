@@ -41,7 +41,7 @@ import {
 
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
+const SCOPES = 'https://www.googleapis.com/auth/youtube';
 const REDIRECT_URI = 'https://spotytubegemini.netlify.app';
 
 const SECTIONS = {
