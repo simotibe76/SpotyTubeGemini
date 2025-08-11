@@ -1,11 +1,31 @@
 import React from 'react';
-import { HeartIcon, ListBulletIcon } from '@heroicons/react/24/solid'; // HeartIcon (pieno) è qui
-import { HeartIcon as HeartOutlineIcon } from '@heroicons/react/24/outline'; // HeartIcon (vuoto) è qui
+import { HeartIcon, ListBulletIcon } from '@heroicons/react/24/solid';
+import { HeartIcon as HeartOutlineIcon } from '@heroicons/react/24/outline';
 
-function FavoritesList({ favorites, playVideo, handleToggleFavorite, openAddToPlaylistModal }) {
+function FavoritesList({ 
+  favorites, 
+  playVideo, 
+  handleToggleFavorite, 
+  openAddToPlaylistModal,
+  handleSyncFavoritesYouTube, // NUOVA PROP
+  isSyncingFavorites // NUOVA PROP
+}) {
   return (
-    <div className="bg-gray-800 rounded-lg p-4 shadow-lg">
-      <h2 className="text-2xl font-bold mb-4 text-purple-300">I tuoi Preferiti:</h2>
+    <div className="bg-gray-800 rounded-lg p-4 shadow-lg pt-20 pb-20">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-3xl font-bold text-purple-300">I tuoi Preferiti:</h2>
+        
+        {/* Pulsante Sincronizza Preferiti */}
+        <button
+          onClick={handleSyncFavoritesYouTube}
+          disabled={isSyncingFavorites}
+          className={`p-2 rounded-full shadow-lg transition-transform duration-200 hover:scale-105 ${isSyncingFavorites ? 'bg-gray-600 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+          title={isSyncingFavorites ? 'Sincronizzazione in corso...' : 'Sincronizza Preferiti con YouTube'}
+        >
+          <span className="text-white font-bold text-sm">{isSyncingFavorites ? '...' : 'Sync'}</span>
+        </button>
+      </div>
+      
       {favorites.length > 0 ? (
         <ul className="space-y-4">
           {favorites.map((item) => (
@@ -29,7 +49,7 @@ function FavoritesList({ favorites, playVideo, handleToggleFavorite, openAddToPl
                   className="p-2 rounded-full hover:bg-purple-500 transition-colors duration-200"
                   title="Rimuovi dai preferiti"
                 >
-                  <HeartIcon className="h-6 w-6 text-red-500" /> {/* Usa HeartIcon piena */}
+                  <HeartIcon className="h-6 w-6 text-red-500" />
                 </button>
                 <button
                   onClick={() => openAddToPlaylistModal(item)}
