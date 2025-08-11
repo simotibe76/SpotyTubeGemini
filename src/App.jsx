@@ -247,7 +247,7 @@ function AppContent() {
 
     try {
       // La chiamata API è ora sicura
-      const response = await window.gapi.client.Youtube.list({
+      const response = await window.gapi.client.youtube.search.list({
         part: 'snippet',
         q: searchTerm,
         type: 'video',
