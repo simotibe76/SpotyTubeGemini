@@ -41,7 +41,8 @@ import {
 
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
+// UPDATED: Aggiunto lo scope per la scrittura
+const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube';
 const REDIRECT_URI = 'https://spotytubegemini.netlify.app';
 
 const SECTIONS = {
@@ -95,6 +96,9 @@ function AppContent() {
   const [userProfile, setUserProfile] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const [isApiReady, setIsApiReady] = useState(false);
+  
+  // STATO PER LA SINCRONIZZAZIONE
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
@@ -243,7 +247,7 @@ function AppContent() {
 
     try {
       // La chiamata API è ora sicura
-      const response = await window.gapi.client.youtube.search.list({
+      const response = await window.gapi.client.Youtube.list({
         part: 'snippet',
         q: searchTerm,
         type: 'video',
@@ -339,20 +343,20 @@ function AppContent() {
   };
 
   const handleClosePlayer = () => {
-      if (playerInstance) {
-          playerInstance.stopVideo();
-      }
-      setPlayingVideoId(null);
-      setCurrentPlayingTitle('');
-      setIsPlaying(false);
-      setVideoCurrentTime(0);
-      setVideoDuration(0);
-      setCurrentPlaylistPlayingId(null);
-      setCurrentPlaylistVideos([]);
-      setCurrentPlaylistIndex(0);
-      if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-      }
+    if (playerInstance) {
+      playerInstance.stopVideo();
+    }
+    setPlayingVideoId(null);
+    setCurrentPlayingTitle('');
+    setIsPlaying(false);
+    setVideoCurrentTime(0);
+    setVideoDuration(0);
+    setCurrentPlaylistPlayingId(null);
+    setCurrentPlaylistVideos([]);
+    setCurrentPlaylistIndex(0);
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
   };
 
   const playPlaylist = async (playlistId) => {
@@ -429,8 +433,95 @@ function AppContent() {
     const updatedFavorites = await getFavorites();
     setFavorites(updatedFavorites);
   };
+  
+  // FUNZIONI DI UTILITÀ PER LE API DI YOUTUBE
+  const createYouTubePlaylist = async (playlistName) => {
+    try {
+      const response = await window.gapi.client.youtube.playlists.insert({
+        part: 'snippet,status',
+        resource: {
+          snippet: {
+            title: playlistName,
+            description: 'Playlist sincronizzata da SpotyTube.',
+          },
+          status: {
+            privacyStatus: 'private', // Scegli tra 'public', 'private', 'unlisted'
+          },
+        },
+      });
+      console.log(`Playlist "${playlistName}" creata su YouTube con ID: ${response.result.id}`);
+      return response.result.id;
+    } catch (err) {
+      console.error(`Errore nella creazione della playlist "${playlistName}" su YouTube:`, err);
+      throw err;
+    }
+  };
+
+  const addVideoToYouTubePlaylist = async (playlistId, videoId) => {
+    try {
+      await window.gapi.client.youtube.playlistItems.insert({
+        part: 'snippet',
+        resource: {
+          snippet: {
+            playlistId: playlistId,
+            resourceId: {
+              kind: 'youtube#video',
+              videoId: videoId,
+            },
+          },
+        },
+      });
+      console.log(`Video ${videoId} aggiunto alla playlist ${playlistId}.`);
+    } catch (err) {
+      console.error(`Errore nell'aggiunta del video ${videoId} alla playlist ${playlistId}:`, err);
+    }
+  };
+
+  // NUOVA FUNZIONE DI SINCRONIZZAZIONE
+  const handleSyncYouTubePlaylists = async () => {
+    if (!isSignedIn) {
+      setError('Devi prima accedere con il tuo account Google per sincronizzare.');
+      return;
+    }
+    if (!isApiReady) {
+      setError('Le API di Google non sono ancora pronte. Riprova tra qualche istante.');
+      return;
+    }
+    
+    setIsSyncing(true);
+    setError(null);
+    
+    try {
+      const localPlaylists = await getPlaylists();
+      
+      if (localPlaylists.length === 0) {
+        alert("Nessuna playlist locale da sincronizzare.");
+        return;
+      }
+      
+      for (const playlist of localPlaylists) {
+        console.log(`Sincronizzazione della playlist: ${playlist.name}`);
+        const newYouTubePlaylistId = await createYouTubePlaylist(playlist.name);
+        
+        if (newYouTubePlaylistId) {
+          for (const video of playlist.videos) {
+            await addVideoToYouTubePlaylist(newYouTubePlaylistId, video.videoId);
+          }
+        }
+      }
+      
+      alert("Sincronizzazione di tutte le playlist completata con successo!");
+    } catch (err) {
+      console.error("Errore durante la sincronizzazione delle playlist:", err);
+      setError("Si è verificato un errore durante la sincronizzazione. Controlla la console per i dettagli.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+  // FINE NUOVE FUNZIONI
 
   const handleCreateNewPlaylist = async () => {
+    // OLD FUNCTIONALITY: Creazione locale.
     if (newPlaylistName.trim()) {
       await createPlaylist(newPlaylistName.trim());
       closeAddToPlaylistModal();
@@ -574,6 +665,9 @@ function AppContent() {
             handleDeletePlaylist={handleDeletePlaylist}
             openCreatePlaylistModal={openCreatePlaylistModal}
             playPlaylist={playPlaylist}
+            // PASSAGGIO DELLE NUOVE PROPS
+            handleSyncYouTubePlaylists={handleSyncYouTubePlaylists}
+            isSyncing={isSyncing}
           />
         );
       case SECTIONS.VIEW_PLAYLIST:
@@ -685,7 +779,7 @@ function AppContent() {
             )}
 
             <div className="mt-4 pt-4 border-t border-gray-700">
-              <h4 className="font-semibold text-lg mb-2">Crea Nuova Playlist:</h4>
+              <h4 className="font-semibold text-lg mb-2">Crea Nuova Playlist (Locale):</h4>
               <div className="flex gap-2">
                 <input
                   type="text"
