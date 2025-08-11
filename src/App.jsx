@@ -1,4 +1,3 @@
-// src/App.jsx
 import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 
@@ -97,8 +96,11 @@ function AppContent() {
   const [accessToken, setAccessToken] = useState(null);
   const [isApiReady, setIsApiReady] = useState(false);
   
-  // STATO PER LA SINCRONIZZAZIONE
+  // STATO PER LA SINCRONIZZAZIONE GENERICA
   const [isSyncing, setIsSyncing] = useState(false);
+  
+  // NUOVO STATO PER LA SINCRONIZZAZIONE DEI PREFERITI
+  const [isSyncingFavorites, setIsSyncingFavorites] = useState(false);
 
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
@@ -247,7 +249,7 @@ function AppContent() {
 
     try {
       // La chiamata API è ora sicura
-      const response = await window.gapi.client.youtube.search.list({
+      const response = await window.gapi.client.Youtube.list({
         part: 'snippet',
         q: searchTerm,
         type: 'video',
@@ -477,7 +479,66 @@ function AppContent() {
     }
   };
 
-  // NUOVA FUNZIONE DI SINCRONIZZAZIONE
+  // FUNZIONE DI SINCRONIZZAZIONE DEI PREFERITI
+  const handleSyncFavoritesYouTube = async () => {
+    if (!isSignedIn) {
+      setError('Devi prima accedere con il tuo account Google per sincronizzare.');
+      return;
+    }
+    if (!isApiReady) {
+      setError('Le API di Google non sono ancora pronte. Riprova tra qualche istante.');
+      return;
+    }
+    
+    setIsSyncingFavorites(true);
+    setError(null);
+    
+    try {
+      const localFavorites = await getFavorites();
+      
+      if (localFavorites.length === 0) {
+        alert("Nessun preferito da sincronizzare.");
+        return;
+      }
+      
+      // Controlla se la playlist "Preferiti da Spotytube" esiste già
+      let youtubePlaylistId = null;
+      const searchResponse = await window.gapi.client.youtube.playlists.list({
+        part: 'snippet',
+        mine: true,
+        maxResults: 50,
+      });
+      
+      const existingPlaylist = searchResponse.result.items.find(
+        (pl) => pl.snippet.title === "Preferiti da Spotytube"
+      );
+      
+      if (existingPlaylist) {
+        youtubePlaylistId = existingPlaylist.id;
+        console.log('Playlist "Preferiti da Spotytube" trovata.');
+      } else {
+        console.log('Playlist "Preferiti da Spotytube" non trovata, la sto creando...');
+        // Se non esiste, la crea
+        const newPlaylistId = await createYouTubePlaylist("Preferiti da Spotytube");
+        youtubePlaylistId = newPlaylistId;
+      }
+      
+      if (youtubePlaylistId) {
+        for (const video of localFavorites) {
+          await addVideoToYouTubePlaylist(youtubePlaylistId, video.videoId);
+        }
+      }
+      
+      alert("Sincronizzazione dei preferiti completata con successo nella playlist 'Preferiti da Spotytube'!");
+    } catch (err) {
+      console.error("Errore durante la sincronizzazione dei preferiti:", err);
+      setError("Si è verificato un errore durante la sincronizzazione dei preferiti. Controlla la console per i dettagli.");
+    } finally {
+      setIsSyncingFavorites(false);
+    }
+  };
+  
+  // FUNZIONE DI SINCRONIZZAZIONE DELLE PLAYLIST ESISTENTE
   const handleSyncYouTubePlaylists = async () => {
     if (!isSignedIn) {
       setError('Devi prima accedere con il tuo account Google per sincronizzare.');
@@ -638,17 +699,17 @@ function AppContent() {
             openAddToPlaylistModal={openAddToPlaylistModal}
           />
         );
-case SECTIONS.FAVORITES:
-  return (
-    <FavoritesList
-      favorites={favorites}
-      playVideo={playVideo}
-      handleToggleFavorite={handleToggleFavorite}
-      openAddToPlaylistModal={openAddToPlaylistModal}
-      handleSyncFavoritesYouTube={handleSyncFavoritesYouTube} // Passa la nuova funzione
-      isSyncingFavorites={isSyncingFavorites} // Passa il nuovo stato
-    />
-  );
+      case SECTIONS.FAVORITES:
+        return (
+          <FavoritesList
+            favorites={favorites}
+            playVideo={playVideo}
+            handleToggleFavorite={handleToggleFavorite}
+            openAddToPlaylistModal={openAddToPlaylistModal}
+            handleSyncFavoritesYouTube={handleSyncFavoritesYouTube} // Passa la nuova funzione
+            isSyncingFavorites={isSyncingFavorites} // Passa il nuovo stato
+          />
+        );
       case SECTIONS.HISTORY:
         return (
           <HistoryList
