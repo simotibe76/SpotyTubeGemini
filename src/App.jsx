@@ -466,7 +466,6 @@ const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
         nextPageToken = response.result.nextPageToken;
       } catch (err) {
         console.error("Errore durante il controllo del video nella playlist:", err);
-        // Restituisco false per non bloccare l'intera sincronizzazione
         return false;
       }
     } while (nextPageToken);
