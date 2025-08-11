@@ -445,30 +445,21 @@ function AppContent() {
     }
   };
   
-const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
+  const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
     let nextPageToken = null;
     do {
-      try {
-        const response = await window.gapi.client.youtube.playlistItems.list({
-          part: 'snippet',
-          playlistId: playlistId,
-          maxResults: 50,
-          pageToken: nextPageToken,
-        });
-
-        const items = response.result.items;
-        if (items) {
-          // Scorro i video per vedere se quello che cerco è già nella playlist
-          const videoFound = items.some(item => item.snippet.resourceId.videoId === videoId);
-          if (videoFound) {
-            return true;
-          }
-        }
-        nextPageToken = response.result.nextPageToken;
-      } catch (err) {
-        console.error("Errore durante il controllo del video nella playlist:", err);
-        return false;
+      const response = await window.gapi.client.youtube.playlistItems.list({
+        part: 'snippet',
+        playlistId: playlistId,
+        videoId: videoId,
+        maxResults: 50,
+        pageToken: nextPageToken,
+      });
+      const items = response.result.items;
+      if (items && items.length > 0) {
+        return true;
       }
+      nextPageToken = response.result.nextPageToken;
     } while (nextPageToken);
     return false;
   };
