@@ -86,6 +86,7 @@ function AppContent() {
   const [isSyncingFavorites, setIsSyncingFavorites] = useState(false);
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
   
+  // NOME FISSO PER LA PLAYLIST DEI PREFERITI
   const FAVORITES_PLAYLIST_NAME = "Preferiti da SpotyTube";
 
   useEffect(() => {
@@ -216,7 +217,7 @@ function AppContent() {
     setActiveSection(SECTIONS.SEARCH);
     setCurrentViewedPlaylistId(null);
     try {
-      const response = await window.gapi.client.youtube.search.list({
+      const response = await window.gapi.client.Youtube.list({
         part: 'snippet',
         q: searchTerm,
         type: 'video',
@@ -258,6 +259,18 @@ function AppContent() {
     setPlayerInstance(event.target);
     event.target.playVideo();
     setIsPlaying(true);
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentPlayingTitle,
+        artist: 'Artista Sconosciuto', // Puoi recuperare l'artista se disponibile dall'API
+        album: 'SpotyTube',
+        artwork: [{ src: `https://img.youtube.com/vi/${playingVideoId}/hqdefault.jpg`, sizes: '96x96', type: 'image/jpeg' }]
+      });
+      navigator.mediaSession.setActionHandler('play', () => playerInstance.playVideo());
+      navigator.mediaSession.setActionHandler('pause', () => playerInstance.pauseVideo());
+      navigator.mediaSession.setActionHandler('previoustrack', () => playPreviousVideo());
+      navigator.mediaSession.setActionHandler('nexttrack', () => playNextVideo());
+    }
   };
 
   const onPlayerStateChange = (event) => {
@@ -447,35 +460,30 @@ function AppContent() {
   const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
     let nextPageToken = null;
     do {
-      try {
-        const response = await window.gapi.client.youtube.playlistItems.list({
-          part: 'snippet',
-          playlistId: playlistId,
-          maxResults: 50,
-          pageToken: nextPageToken,
-        });
-
-        const items = response.result.items;
-        if (items) {
-          const videoFound = items.some(item => item.snippet.resourceId.videoId === videoId);
-          if (videoFound) {
-            return true;
-          }
-        }
-        nextPageToken = response.result.nextPageToken;
-      } catch (err) {
-        console.error("Errore durante il controllo del video nella playlist:", err);
-        return false;
+      const response = await window.gapi.client.youtube.playlistItems.list({
+        part: 'snippet',
+        playlistId: playlistId,
+        videoId: videoId,
+        maxResults: 50,
+        pageToken: nextPageToken,
+      });
+      const items = response.result.items;
+      if (items && items.length > 0) {
+        return true;
       }
+      nextPageToken = response.result.nextPageToken;
     } while (nextPageToken);
     return false;
   };
-
-  const delay = (ms) => new Promise(res => setTimeout(res, ms));
   
+  // FUNZIONE DI SINCRONIZZAZIONE DEI PREFERITI CON LOGICA "SPOTYTUBE"
   const handleSyncFavoritesYouTube = async () => {
-    if (!isSignedIn || !isApiReady) {
-      setError('Devi prima accedere con il tuo account Google e assicurarti che le API siano pronte.');
+    if (!isSignedIn) {
+      setError('Devi prima accedere con il tuo account Google per sincronizzare.');
+      return;
+    }
+    if (!isApiReady) {
+      setError('Le API di Google non sono ancora pronte. Riprova tra qualche istante.');
       return;
     }
     
@@ -508,7 +516,6 @@ function AppContent() {
         console.log(`Playlist "${FAVORITES_PLAYLIST_NAME}" non trovata, la sto creando...`);
         const newPlaylistId = await createYouTubePlaylist(FAVORITES_PLAYLIST_NAME);
         youtubePlaylistId = newPlaylistId;
-        await delay(2000); 
       }
       
       if (youtubePlaylistId) {
@@ -531,9 +538,14 @@ function AppContent() {
     }
   };
   
+  // FUNZIONE DI SINCRONIZZAZIONE DELLE PLAYLIST ESISTENTE - LOGICA "SPOTYTUBE"
   const handleSyncYouTubePlaylists = async () => {
-    if (!isSignedIn || !isApiReady) {
-      setError('Devi prima accedere con il tuo account Google e assicurarti che le API siano pronte.');
+    if (!isSignedIn) {
+      setError('Devi prima accedere con il tuo account Google per sincronizzare.');
+      return;
+    }
+    if (!isApiReady) {
+      setError('Le API di Google non sono ancora pronte. Riprova tra qualche istante.');
       return;
     }
     
@@ -566,7 +578,6 @@ function AppContent() {
         } else {
           console.log(`Playlist "${youtubePlaylistName}" non trovata, la sto creando...`);
           youtubePlaylistId = await createYouTubePlaylist(youtubePlaylistName);
-          await delay(2000); 
         }
         
         if (youtubePlaylistId) {
