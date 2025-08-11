@@ -1,58 +1,63 @@
-import React from 'react';
 import { HeartIcon as HeartOutlineIcon } from '@heroicons/react/24/outline';
 import { HeartIcon, ListBulletIcon } from '@heroicons/react/24/solid';
 
-function SearchResults({ searchResults, playVideo, favorites, handleToggleFavorite, openAddToPlaylistModal }) {
+const SearchResults = ({ searchResults, playVideo, favorites, handleToggleFavorite, openAddToPlaylistModal }) => {
   if (searchResults.length === 0) {
     return (
-      <p className="text-center text-gray-400 text-xl mt-10">Cerca musica o audiolibri per iniziare!</p>
+      <div className="flex flex-col items-center justify-center p-8 bg-gray-800 rounded-xl shadow-xl mt-8">
+        <h2 className="text-3xl font-bold text-purple-400 mb-2">Inizia a cercare!</h2>
+        <p className="text-gray-400 text-lg">Trova la tua musica o i tuoi audiolibri preferiti.</p>
+      </div>
     );
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4 shadow-lg">
-      <h2 className="text-2xl font-bold mb-4 text-purple-300">Risultati della Ricerca:</h2>
+    <div className="p-4 md:p-8 bg-gray-900">
+      <h2 className="text-2xl font-bold mb-6 text-purple-400">Risultati della Ricerca</h2>
       <ul className="space-y-4">
-        {searchResults.map((item) => (
-          <li
-            key={item.videoId}
-            className="flex items-center gap-4 bg-gray-700 rounded-lg p-3 hover:bg-gray-600 transition-colors duration-150"
-          >
-            <img
-              src={item.thumbnail}
-              alt={item.title}
-              className="w-16 h-16 rounded-md object-cover cursor-pointer"
-              onClick={() => playVideo(item)}
-            />
-            <div className="flex-grow cursor-pointer" onClick={() => playVideo(item)}>
-              <p className="font-semibold text-lg">{item.title}</p>
-              <p className="text-gray-400 text-sm">{item.channelTitle}</p>
-            </div>
-            <div className="flex gap-2 items-center">
-              <button
-                onClick={() => handleToggleFavorite(item)}
-                className="p-2 rounded-full hover:bg-purple-500 transition-colors duration-200"
-                title={favorites.some(fav => fav.videoId === item.videoId) ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-              >
-                {favorites.some(fav => fav.videoId === item.videoId) ? (
-                  <HeartIcon className="h-6 w-6 text-red-500" />
-                ) : (
-                  <HeartOutlineIcon className="h-6 w-6 text-gray-400" />
-                )}
-              </button>
-              <button
-                onClick={() => openAddToPlaylistModal(item)}
-                className="p-2 rounded-full hover:bg-purple-500 transition-colors duration-200"
-                title="Aggiungi a playlist"
-              >
-                <ListBulletIcon className="h-6 w-6 text-gray-400" />
-              </button>
-            </div>
-          </li>
-        ))}
+        {searchResults.map((item) => {
+          const isFav = favorites.some((fav) => fav.videoId === item.videoId);
+          return (
+            <li
+              key={item.videoId}
+              className="flex items-center gap-4 bg-gray-800 rounded-xl p-4 shadow-lg hover:bg-gray-700 transition-all duration-200"
+            >
+              <img
+                src={item.thumbnail}
+                alt={item.title}
+                className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg object-cover flex-shrink-0 cursor-pointer"
+                onClick={() => playVideo(item)}
+              />
+              <div className="flex-grow min-w-0 cursor-pointer" onClick={() => playVideo(item)}>
+                <p className="font-semibold text-lg text-white truncate">{item.title}</p>
+                <p className="text-gray-400 text-sm truncate">{item.channelTitle}</p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 items-center flex-shrink-0">
+                <button
+                  onClick={() => handleToggleFavorite(item)}
+                  className="p-2 rounded-full text-white bg-gray-700 hover:bg-purple-600 transition-colors duration-200 shadow-md"
+                  title={isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
+                >
+                  {isFav ? (
+                    <HeartIcon className="h-6 w-6 text-red-500" />
+                  ) : (
+                    <HeartOutlineIcon className="h-6 w-6 text-gray-400" />
+                  )}
+                </button>
+                <button
+                  onClick={() => openAddToPlaylistModal(item)}
+                  className="p-2 rounded-full text-white bg-gray-700 hover:bg-purple-600 transition-colors duration-200 shadow-md"
+                  title="Aggiungi a playlist"
+                >
+                  <ListBulletIcon className="h-6 w-6 text-gray-400" />
+                </button>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
-}
+};
 
 export default SearchResults;
