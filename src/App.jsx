@@ -85,6 +85,9 @@ function AppContent() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSyncingFavorites, setIsSyncingFavorites] = useState(false);
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
+  
+  // NOME FISSO PER LA PLAYLIST DEI PREFERITI
+  const FAVORITES_PLAYLIST_NAME = "Preferiti da SpotyTube";
 
   useEffect(() => {
     const initGoogleApis = async () => {
@@ -441,8 +444,7 @@ function AppContent() {
       console.error(`Errore nell'aggiunta del video ${videoId} alla playlist ${playlistId}:`, err);
     }
   };
-
-  // NUOVA FUNZIONE PER CONTROLLARE SE UN VIDEO ESISTE GIÀ IN UNA PLAYLIST
+  
   const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
     let nextPageToken = null;
     do {
@@ -462,7 +464,7 @@ function AppContent() {
     return false;
   };
   
-  // NUOVA FUNZIONE DI SINCRONIZZAZIONE DEI PREFERITI - LOGICA MIGLIORATA
+  // NUOVA FUNZIONE DI SINCRONIZZAZIONE DEI PREFERITI CON LOGICA "SPOTYTUBE"
   const handleSyncFavoritesYouTube = async () => {
     if (!isSignedIn) {
       setError('Devi prima accedere con il tuo account Google per sincronizzare.');
@@ -492,15 +494,15 @@ function AppContent() {
       });
       
       const existingPlaylist = playlistsResponse.result.items.find(
-        (pl) => pl.snippet.title === "Preferiti da Spotytube"
+        (pl) => pl.snippet.title === FAVORITES_PLAYLIST_NAME
       );
       
       if (existingPlaylist) {
         youtubePlaylistId = existingPlaylist.id;
-        console.log('Playlist "Preferiti da Spotytube" trovata. ID:', youtubePlaylistId);
+        console.log(`Playlist "${FAVORITES_PLAYLIST_NAME}" trovata. ID:`, youtubePlaylistId);
       } else {
-        console.log('Playlist "Preferiti da Spotytube" non trovata, la sto creando...');
-        const newPlaylistId = await createYouTubePlaylist("Preferiti da Spotytube");
+        console.log(`Playlist "${FAVORITES_PLAYLIST_NAME}" non trovata, la sto creando...`);
+        const newPlaylistId = await createYouTubePlaylist(FAVORITES_PLAYLIST_NAME);
         youtubePlaylistId = newPlaylistId;
       }
       
@@ -515,7 +517,7 @@ function AppContent() {
         }
       }
       
-      alert("Sincronizzazione dei preferiti completata con successo nella playlist 'Preferiti da Spotytube'!");
+      alert(`Sincronizzazione dei preferiti completata con successo nella playlist '${FAVORITES_PLAYLIST_NAME}'!`);
     } catch (err) {
       console.error("Errore durante la sincronizzazione dei preferiti:", err);
       setError("Si è verificato un errore durante la sincronizzazione dei preferiti. Controlla la console per i dettagli.");
@@ -523,8 +525,8 @@ function AppContent() {
       setIsSyncingFavorites(false);
     }
   };
-
-  // FUNZIONE DI SINCRONIZZAZIONE DELLE PLAYLIST ESISTENTE - LOGICA MIGLIORATA
+  
+  // FUNZIONE DI SINCRONIZZAZIONE DELLE PLAYLIST ESISTENTE - LOGICA "SPOTYTUBE"
   const handleSyncYouTubePlaylists = async () => {
     if (!isSignedIn) {
       setError('Devi prima accedere con il tuo account Google per sincronizzare.');
@@ -554,15 +556,16 @@ function AppContent() {
       const youtubePlaylists = playlistsResponse.result.items;
       
       for (const playlist of localPlaylists) {
-        let youtubePlaylist = youtubePlaylists.find(pl => pl.snippet.title === playlist.name);
+        const youtubePlaylistName = `${playlist.name} da SpotyTube`;
+        let youtubePlaylist = youtubePlaylists.find(pl => pl.snippet.title === youtubePlaylistName);
         let youtubePlaylistId;
         
         if (youtubePlaylist) {
           youtubePlaylistId = youtubePlaylist.id;
-          console.log(`Playlist "${playlist.name}" trovata su YouTube. ID: ${youtubePlaylistId}`);
+          console.log(`Playlist "${youtubePlaylistName}" trovata su YouTube. ID: ${youtubePlaylistId}`);
         } else {
-          console.log(`Playlist "${playlist.name}" non trovata, la sto creando...`);
-          youtubePlaylistId = await createYouTubePlaylist(playlist.name);
+          console.log(`Playlist "${youtubePlaylistName}" non trovata, la sto creando...`);
+          youtubePlaylistId = await createYouTubePlaylist(youtubePlaylistName);
         }
         
         if (youtubePlaylistId) {
@@ -571,7 +574,7 @@ function AppContent() {
             if (!videoExists) {
               await addVideoToYouTubePlaylist(youtubePlaylistId, video.videoId);
             } else {
-              console.log(`Il video ${video.videoId} è già presente nella playlist "${playlist.name}". Salto.`);
+              console.log(`Il video ${video.videoId} è già presente nella playlist "${youtubePlaylistName}". Salto.`);
             }
           }
         }
