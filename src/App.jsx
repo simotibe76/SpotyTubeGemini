@@ -445,21 +445,30 @@ function AppContent() {
     }
   };
   
-  const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
+const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
     let nextPageToken = null;
     do {
-      const response = await window.gapi.client.youtube.playlistItems.list({
-        part: 'snippet',
-        playlistId: playlistId,
-        videoId: videoId,
-        maxResults: 50,
-        pageToken: nextPageToken,
-      });
-      const items = response.result.items;
-      if (items && items.length > 0) {
-        return true;
+      try {
+        const response = await window.gapi.client.youtube.playlistItems.list({
+          part: 'snippet',
+          playlistId: playlistId,
+          maxResults: 50,
+          pageToken: nextPageToken,
+        });
+
+        const items = response.result.items;
+        if (items) {
+          const videoFound = items.some(item => item.snippet.resourceId.videoId === videoId);
+          if (videoFound) {
+            return true;
+          }
+        }
+        nextPageToken = response.result.nextPageToken;
+      } catch (err) {
+        console.error("Errore durante il controllo del video nella playlist:", err);
+        // Restituisco false per non bloccare l'intera sincronizzazione
+        return false;
       }
-      nextPageToken = response.result.nextPageToken;
     } while (nextPageToken);
     return false;
   };
