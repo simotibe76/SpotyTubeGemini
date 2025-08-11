@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
-
-// Importazioni Icone
 import {
   HeartIcon,
   PlusIcon,
@@ -11,8 +9,6 @@ import {
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/solid';
 import { HeartIcon as HeartOutlineIcon } from '@heroicons/react/24/outline';
-
-// Importazioni Componenti
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import PlayerControls from './components/PlayerControls';
@@ -21,8 +17,6 @@ import FavoritesList from './components/FavoritesList';
 import HistoryList from './components/HistoryList';
 import PlaylistsOverview from './components/PlaylistsOverview';
 import PlaylistDetail from './components/PlaylistDetail';
-
-// Importazioni funzioni del database locale
 import {
   addFavorite,
   removeFavorite,
@@ -37,13 +31,10 @@ import {
   deletePlaylist,
   getPlaylist
 } from './db';
-
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-// UPDATED: Aggiunto lo scope per la scrittura
 const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube';
 const REDIRECT_URI = 'https://spotytubegemini.netlify.app';
-
 const SECTIONS = {
   SEARCH: 'search',
   FAVORITES: 'favorites',
@@ -51,8 +42,6 @@ const SECTIONS = {
   PLAYLISTS: 'playlists',
   VIEW_PLAYLIST: 'viewPlaylist',
 };
-
-// Funzione per caricare script con Promise
 const loadScript = (src) => {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
@@ -89,29 +78,19 @@ function AppContent() {
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const intervalRef = useRef(null);
-
-  // STATI PER GOOGLE API E AUTENTICAZIONE
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const [isApiReady, setIsApiReady] = useState(false);
-  
-  // STATO PER LA SINCRONIZZAZIONE GENERICA
   const [isSyncing, setIsSyncing] = useState(false);
-  
-  // NUOVO STATO PER LA SINCRONIZZAZIONE DEI PREFERITI
   const [isSyncingFavorites, setIsSyncingFavorites] = useState(false);
-
   const isSearchDisabled = !isSignedIn || loading || !isApiReady;
 
-  // Caricamento e inizializzazione delle API di Google e dati iniziali
   useEffect(() => {
     const initGoogleApis = async () => {
       try {
         await loadScript('https://apis.google.com/js/api.js');
         await loadScript('https://accounts.google.com/gsi/client');
-        
-        // Inizializzazione di gapi.client
         window.gapi.load('client', () => {
           window.gapi.client.init({
             apiKey: YOUTUBE_API_KEY,
@@ -130,13 +109,11 @@ function AppContent() {
       }
     };
     initGoogleApis();
-
     const fetchFavoritesOnLoad = async () => {
       const favs = await getFavorites();
       setFavorites(favs);
     };
     fetchFavoritesOnLoad();
-    
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -144,17 +121,13 @@ function AppContent() {
     };
   }, []);
 
-  // Gestione dell'autenticazione tramite URL e recupero del profilo utente
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.substring(1));
     const tokenFromUrl = params.get('access_token');
-    
-    // Attendiamo che l'API sia pronta prima di usare il token
     if (tokenFromUrl && isApiReady) {
       setAccessToken(tokenFromUrl);
       setIsSignedIn(true);
       window.gapi.client.setToken({ access_token: tokenFromUrl });
-      
       const fetchUserProfile = async () => {
         try {
           const response = await window.gapi.client.youtube.channels.list({
@@ -174,9 +147,7 @@ function AppContent() {
           setError("Impossibile recuperare il profilo utente.");
         }
       };
-
       fetchUserProfile();
-      
       window.history.pushState("", document.title, window.location.pathname + window.location.search);
     }
   }, [isApiReady]);
@@ -186,7 +157,7 @@ function AppContent() {
       loadData(activeSection);
     }
   }, [activeSection, currentViewedPlaylistId, isSignedIn]);
-  
+
   const handleGoogleAuthClick = () => {
     window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=token&scope=${SCOPES}`;
   };
@@ -231,31 +202,24 @@ function AppContent() {
       setError('Devi prima accedere con il tuo account Google.');
       return;
     }
-    
-    // Controlliamo che l'API sia pronta E che l'oggetto Youtube esista
     if (!isApiReady || !window.gapi.client.youtube?.search) {
       setError('Le API di Google non sono ancora pronte. Riprova fra qualche istante.');
       console.error("Tentativo di ricerca fallito: GAPI non è pronto.");
       return;
     }
-    
     if (!searchTerm.trim()) return;
-
     setLoading(true);
     setError(null);
     setSearchResults([]);
     setActiveSection(SECTIONS.SEARCH);
     setCurrentViewedPlaylistId(null);
-
     try {
-      // La chiamata API è ora sicura ma con chatgpt window.gapi.client.youtube.search.list
       const response = await window.gapi.client.youtube.search.list({
         part: 'snippet',
         q: searchTerm,
         type: 'video',
         maxResults: 10,
       });
-
       const videos = response.result.items.filter(item => item.id.kind === 'youtube#video');
       const formattedVideos = videos.map(video => ({
         videoId: video.id.videoId,
@@ -435,8 +399,7 @@ function AppContent() {
     const updatedFavorites = await getFavorites();
     setFavorites(updatedFavorites);
   };
-  
-  // FUNZIONI DI UTILITÀ PER LE API DI YOUTUBE
+
   const createYouTubePlaylist = async (playlistName) => {
     try {
       const response = await window.gapi.client.youtube.playlists.insert({
@@ -447,7 +410,7 @@ function AppContent() {
             description: 'Playlist sincronizzata da SpotyTube.',
           },
           status: {
-            privacyStatus: 'private', // Scegli tra 'public', 'private', 'unlisted'
+            privacyStatus: 'private',
           },
         },
       });
@@ -479,7 +442,27 @@ function AppContent() {
     }
   };
 
-  // FUNZIONE DI SINCRONIZZAZIONE DEI PREFERITI
+  // NUOVA FUNZIONE PER CONTROLLARE SE UN VIDEO ESISTE GIÀ IN UNA PLAYLIST
+  const checkIfVideoExistsInPlaylist = async (playlistId, videoId) => {
+    let nextPageToken = null;
+    do {
+      const response = await window.gapi.client.youtube.playlistItems.list({
+        part: 'snippet',
+        playlistId: playlistId,
+        videoId: videoId,
+        maxResults: 50,
+        pageToken: nextPageToken,
+      });
+      const items = response.result.items;
+      if (items && items.length > 0) {
+        return true;
+      }
+      nextPageToken = response.result.nextPageToken;
+    } while (nextPageToken);
+    return false;
+  };
+  
+  // NUOVA FUNZIONE DI SINCRONIZZAZIONE DEI PREFERITI - LOGICA MIGLIORATA
   const handleSyncFavoritesYouTube = async () => {
     if (!isSignedIn) {
       setError('Devi prima accedere con il tuo account Google per sincronizzare.');
@@ -495,37 +478,40 @@ function AppContent() {
     
     try {
       const localFavorites = await getFavorites();
-      
       if (localFavorites.length === 0) {
         alert("Nessun preferito da sincronizzare.");
+        setIsSyncingFavorites(false);
         return;
       }
       
-      // Controlla se la playlist "Preferiti da Spotytube" esiste già
       let youtubePlaylistId = null;
-      const searchResponse = await window.gapi.client.youtube.playlists.list({
+      const playlistsResponse = await window.gapi.client.youtube.playlists.list({
         part: 'snippet',
         mine: true,
         maxResults: 50,
       });
       
-      const existingPlaylist = searchResponse.result.items.find(
+      const existingPlaylist = playlistsResponse.result.items.find(
         (pl) => pl.snippet.title === "Preferiti da Spotytube"
       );
       
       if (existingPlaylist) {
         youtubePlaylistId = existingPlaylist.id;
-        console.log('Playlist "Preferiti da Spotytube" trovata.');
+        console.log('Playlist "Preferiti da Spotytube" trovata. ID:', youtubePlaylistId);
       } else {
         console.log('Playlist "Preferiti da Spotytube" non trovata, la sto creando...');
-        // Se non esiste, la crea
         const newPlaylistId = await createYouTubePlaylist("Preferiti da Spotytube");
         youtubePlaylistId = newPlaylistId;
       }
       
       if (youtubePlaylistId) {
         for (const video of localFavorites) {
-          await addVideoToYouTubePlaylist(youtubePlaylistId, video.videoId);
+          const videoExists = await checkIfVideoExistsInPlaylist(youtubePlaylistId, video.videoId);
+          if (!videoExists) {
+            await addVideoToYouTubePlaylist(youtubePlaylistId, video.videoId);
+          } else {
+            console.log(`Il video ${video.videoId} è già presente nella playlist. Salto.`);
+          }
         }
       }
       
@@ -537,8 +523,8 @@ function AppContent() {
       setIsSyncingFavorites(false);
     }
   };
-  
-  // FUNZIONE DI SINCRONIZZAZIONE DELLE PLAYLIST ESISTENTE
+
+  // FUNZIONE DI SINCRONIZZAZIONE DELLE PLAYLIST ESISTENTE - LOGICA MIGLIORATA
   const handleSyncYouTubePlaylists = async () => {
     if (!isSignedIn) {
       setError('Devi prima accedere con il tuo account Google per sincronizzare.');
@@ -554,19 +540,39 @@ function AppContent() {
     
     try {
       const localPlaylists = await getPlaylists();
-      
       if (localPlaylists.length === 0) {
         alert("Nessuna playlist locale da sincronizzare.");
+        setIsSyncing(false);
         return;
       }
       
+      const playlistsResponse = await window.gapi.client.youtube.playlists.list({
+        part: 'snippet',
+        mine: true,
+        maxResults: 50,
+      });
+      const youtubePlaylists = playlistsResponse.result.items;
+      
       for (const playlist of localPlaylists) {
-        console.log(`Sincronizzazione della playlist: ${playlist.name}`);
-        const newYouTubePlaylistId = await createYouTubePlaylist(playlist.name);
+        let youtubePlaylist = youtubePlaylists.find(pl => pl.snippet.title === playlist.name);
+        let youtubePlaylistId;
         
-        if (newYouTubePlaylistId) {
+        if (youtubePlaylist) {
+          youtubePlaylistId = youtubePlaylist.id;
+          console.log(`Playlist "${playlist.name}" trovata su YouTube. ID: ${youtubePlaylistId}`);
+        } else {
+          console.log(`Playlist "${playlist.name}" non trovata, la sto creando...`);
+          youtubePlaylistId = await createYouTubePlaylist(playlist.name);
+        }
+        
+        if (youtubePlaylistId) {
           for (const video of playlist.videos) {
-            await addVideoToYouTubePlaylist(newYouTubePlaylistId, video.videoId);
+            const videoExists = await checkIfVideoExistsInPlaylist(youtubePlaylistId, video.videoId);
+            if (!videoExists) {
+              await addVideoToYouTubePlaylist(youtubePlaylistId, video.videoId);
+            } else {
+              console.log(`Il video ${video.videoId} è già presente nella playlist "${playlist.name}". Salto.`);
+            }
           }
         }
       }
@@ -579,10 +585,8 @@ function AppContent() {
       setIsSyncing(false);
     }
   };
-  // FINE NUOVE FUNZIONI
 
   const handleCreateNewPlaylist = async () => {
-    // OLD FUNCTIONALITY: Creazione locale.
     if (newPlaylistName.trim()) {
       await createPlaylist(newPlaylistName.trim());
       closeAddToPlaylistModal();
@@ -622,9 +626,6 @@ function AppContent() {
         } else {
           playNextVideo();
         }
-      } else {
-        // Se il video rimosso non era quello corrente, ma l'indice corrente è ora fuori dai limiti
-        // o punta ad un video sbagliato a causa della rimozione, ricalcola l'indice o resetta.
       }
     }
   };
@@ -706,8 +707,8 @@ function AppContent() {
             playVideo={playVideo}
             handleToggleFavorite={handleToggleFavorite}
             openAddToPlaylistModal={openAddToPlaylistModal}
-            handleSyncFavoritesYouTube={handleSyncFavoritesYouTube} // Passa la nuova funzione
-            isSyncingFavorites={isSyncingFavorites} // Passa il nuovo stato
+            handleSyncFavoritesYouTube={handleSyncFavoritesYouTube}
+            isSyncingFavorites={isSyncingFavorites}
           />
         );
       case SECTIONS.HISTORY:
@@ -728,7 +729,6 @@ function AppContent() {
             handleDeletePlaylist={handleDeletePlaylist}
             openCreatePlaylistModal={openCreatePlaylistModal}
             playPlaylist={playPlaylist}
-            // PASSAGGIO DELLE NUOVE PROPS
             handleSyncYouTubePlaylists={handleSyncYouTubePlaylists}
             isSyncing={isSyncing}
           />
@@ -765,11 +765,9 @@ function AppContent() {
         handleSignOut={handleSignOut}
         isSearchDisabled={isSearchDisabled}
       />
-
       <main className="w-full max-w-2xl flex-grow mb-4">
         {renderContent()}
       </main>
-
       {isSignedIn && (
         <Navigation
           activeSection={activeSection}
@@ -781,7 +779,6 @@ function AppContent() {
           handleSignOut={handleSignOut}
         />
       )}
-
       {playingVideoId && (
         <PlayerControls
           playingVideoId={playingVideoId}
@@ -801,7 +798,6 @@ function AppContent() {
           isPlaylistActive={!!currentPlaylistPlayingId}
         />
       )}
-
       {showAddToPlaylistModal && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-[100]">
           <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md relative">
@@ -817,7 +813,6 @@ function AppContent() {
             {videoToAdd && (
               <p className="text-gray-300 mb-4">Brano: <span className="font-semibold">{videoToAdd.title}</span></p>
             )}
-
             {videoToAdd && (
               <div className="mb-6">
                 <h4 className="font-semibold text-lg mb-2">Playlist Esistenti:</h4>
@@ -840,7 +835,6 @@ function AppContent() {
                 )}
               </div>
             )}
-
             <div className="mt-4 pt-4 border-t border-gray-700">
               <h4 className="font-semibold text-lg mb-2">Crea Nuova Playlist (Locale):</h4>
               <div className="flex gap-2">
@@ -860,7 +854,6 @@ function AppContent() {
                 </button>
               </div>
             </div>
-
             <button
               onClick={closeAddToPlaylistModal}
               className="mt-4 w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg font-bold transition-colors duration-200"
