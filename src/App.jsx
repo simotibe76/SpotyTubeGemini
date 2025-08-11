@@ -511,7 +511,7 @@ const handleSearch = async (e) => {
 
   try {
     // === QUESTA È LA RIGA DA CONTROLLARE ===
-    const response = await window.gapi.client.Youtube.list({
+    const response = await window.gapi.client.youtube.search.list({
       part: 'snippet',
       q: searchTerm,
       type: 'video',
